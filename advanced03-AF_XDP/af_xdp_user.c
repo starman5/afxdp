@@ -646,7 +646,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Receive and count packets than drop them */
-	rx_and_process(&cfg, xsk_socket);
+	rx_and_process(&cfg, xsk_sockets[0]);
 
 	/* Cleanup */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
