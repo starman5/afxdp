@@ -203,7 +203,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	if (ret)
 		goto error_exit;
 
-	std::cout << "After creation of a socket" << std::endl;
+	printf("After creation of a socket\n");
 
 	// TODO: Think about this
 	if (custom_xsk) {
@@ -649,7 +649,9 @@ int main(int argc, char **argv)
 	rx_and_process(&cfg, xsk_socket);
 
 	/* Cleanup */
-	xsk_socket__delete(xsk_socket->xsk);
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		xsk_socket__delete(xsk_sockets[sockidx]->xsk);
+	}
 	xsk_umem__delete(umem->umem);
 
 	return EXIT_OK;
