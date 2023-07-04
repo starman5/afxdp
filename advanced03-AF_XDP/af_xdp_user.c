@@ -176,6 +176,8 @@ static uint64_t xsk_umem_free_frames(struct xsk_socket_info *xsk)
 	return xsk->umem_frame_free;
 }
 
+int numSockets = 0;
+
 static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 						    struct xsk_umem_info *umem)
 {
@@ -204,6 +206,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 		goto error_exit;
 
 	printf("After creation of a socket\n");
+	++numSockets;
 
 	// TODO: Think about this
 	if (custom_xsk) {
@@ -225,24 +228,30 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_info->umem_frame_free = NUM_FRAMES;
 	printf("After initializing umem\n");
 
+	// TODO: This is the problem
+	// I think this should only be done once.  It looks like we are reserving all entries, so we cant
+	// do that twice
 	/* Stuff the receive path with buffers, we assume we have enough */
-	ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
-				     XSK_RING_PROD__DEFAULT_NUM_DESCS,
-				     &idx);
+	if (numSockets == 1) {
+		ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
+						XSK_RING_PROD__DEFAULT_NUM_DESCS,
+						&idx);
 
-	if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
-		goto error_exit;
-	printf("After ring_prod__reserver\n");
+		if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
+			goto error_exit;
+	
+		printf("After ring_prod__reserver\n");
 
-	for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
-		*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
-			xsk_alloc_umem_frame(xsk_info);
+		for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
+			*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
+				xsk_alloc_umem_frame(xsk_info);
 		
-	printf("After for loop\n");
+		printf("After for loop\n");
 
-	xsk_ring_prod__submit(&xsk_info->umem->fq,
-			      XSK_RING_PROD__DEFAULT_NUM_DESCS);
-	printf("After submit\n");
+		xsk_ring_prod__submit(&xsk_info->umem->fq,
+			      	XSK_RING_PROD__DEFAULT_NUM_DESCS);
+		printf("After submit\n");
+	}
 
 	return xsk_info;
 
