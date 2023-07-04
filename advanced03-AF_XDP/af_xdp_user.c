@@ -637,7 +637,7 @@ int main(int argc, char **argv)
 	/* Start thread to do statistics display */
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
-				     xsk_socket);
+				     xsk_sockets[0]);
 		if (ret) {
 			fprintf(stderr, "ERROR: Failed creating statistics thread "
 				"\"%s\"\n", strerror(errno));
