@@ -34,6 +34,7 @@
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
+#define NUM_SOCKETS		   2
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -133,6 +134,14 @@ static struct xsk_umem_info *configure_xsk_umem(void *buffer, uint64_t size)
 	if (!umem)
 		return NULL;
 
+	/*
+	Allocate another xsk_umem (new_umem)
+	set new_umem->fd = socket(AF_XDP, SOCK_RAW, 0).  Whats this about?
+	set new_umem->umem_area = buffer
+	set new_umem->config = user_config
+	call xsk_create_umem_rings(new_umem, new_umem->fd, fill, comp)
+	fill in user-provided umem (umem->umem) with new_umem
+	*/
 	ret = xsk_umem__create(&umem->umem, buffer, size, &umem->fq, &umem->cq,
 			       NULL);
 	if (ret) {
@@ -185,14 +194,18 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
 	xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
 	xsk_cfg.xdp_flags = cfg->xdp_flags;
-	xsk_cfg.bind_flags = cfg->xsk_bind_flags;
-	xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
+	xsk_cfg.bind_flags = cfg->xsk_bind_flags;	// TODO: consider this
+	//xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
+	xsk_cfg.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD;
 	ret = xsk_socket__create(&xsk_info->xsk, cfg->ifname,
 				 cfg->xsk_if_queue, umem->umem, &xsk_info->rx,
 				 &xsk_info->tx, &xsk_cfg);
 	if (ret)
 		goto error_exit;
 
+	std::cout << "After creation of a socket" << std::endl;
+
+	// TODO: Think about this
 	if (custom_xsk) {
 		ret = xsk_socket__update_xskmap(xsk_info->xsk, xsk_map_fd);
 		if (ret)
@@ -203,6 +216,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 			goto error_exit;
 	}
 
+	// TODO: Should this be outside?
 	/* Initialize umem frame allocation */
 	for (i = 0; i < NUM_FRAMES; i++)
 		xsk_info->umem_frame_addr[i] = i * FRAME_SIZE;
@@ -520,7 +534,7 @@ int main(int argc, char **argv)
 	DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
 	struct xsk_umem_info *umem;
-	struct xsk_socket_info *xsk_socket;
+	struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
 	pthread_t stats_poll_thread;
 	int err;
 	char errmsg[1024];
@@ -609,12 +623,15 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	/* Open and configure the AF_XDP (xsk) socket */
-	xsk_socket = xsk_configure_socket(&cfg, umem);
-	if (xsk_socket == NULL) {
-		fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
-			strerror(errno));
-		exit(EXIT_FAILURE);
+	/* Open and configure the AF_XDP (xsk) sockets */
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		struct xsk_socket_info* xsk_socket = xsk_configure_socket(&cfg, umem);
+		if (xsk_socket == NULL) {
+			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
+				strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+		xsk_sockets[sockidx] = xsk_socket;
 	}
 
 	/* Start thread to do statistics display */
