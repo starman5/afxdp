@@ -34,7 +34,7 @@
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   1
+#define NUM_SOCKETS		   2
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -549,8 +549,8 @@ int main(int argc, char **argv)
 	DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
 	struct xsk_umem_info *umem;
-	//struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
-	struct xsk_socket_info* xsk_socket;
+	struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
+	//struct xsk_socket_info* xsk_socket;
 	pthread_t stats_poll_thread;
 	int err;
 	char errmsg[1024];
@@ -640,19 +640,19 @@ int main(int argc, char **argv)
 	}
 
 	/* Open and configure the AF_XDP (xsk) sockets */
-	//for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		xsk_socket = xsk_configure_socket(&cfg, umem);
-		if (xsk_socket == NULL) {
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umem);
+		if (xsk_socket[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-	//}
+	}
 
 	/* Start thread to do statistics display */
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
-				     xsk_socket);
+				     xsk_sockets[0]);
 		if (ret) {
 			fprintf(stderr, "ERROR: Failed creating statistics thread "
 				"\"%s\"\n", strerror(errno));
@@ -661,12 +661,12 @@ int main(int argc, char **argv)
 	}
 
 	/* Receive and count packets than drop them */
-	rx_and_process(&cfg, xsk_socket);
+	rx_and_process(&cfg, xsk_sockets[0]);
 
 	/* Cleanup */
-	//for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		xsk_socket__delete(xsk_socket->xsk);
-	//}
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		xsk_socket__delete(xsk_sockets[sockidx]->xsk);
+	}
 	xsk_umem__delete(umem->umem);
 
 	return EXIT_OK;
