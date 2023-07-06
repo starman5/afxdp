@@ -549,7 +549,8 @@ int main(int argc, char **argv)
 	DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
 	struct xsk_umem_info *umem;
-	struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
+	//struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
+	struct xsk_socket_info* xsk_socket;
 	pthread_t stats_poll_thread;
 	int err;
 	char errmsg[1024];
@@ -640,19 +641,18 @@ int main(int argc, char **argv)
 
 	/* Open and configure the AF_XDP (xsk) sockets */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		struct xsk_socket_info* xsk_socket = xsk_configure_socket(&cfg, umem);
+		xsk_socket = xsk_configure_socket(&cfg, umem);
 		if (xsk_socket == NULL) {
 			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-		xsk_sockets[sockidx] = xsk_socket;
 	}
 
 	/* Start thread to do statistics display */
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
-				     xsk_sockets[0]);
+				     xsk_socket);
 		if (ret) {
 			fprintf(stderr, "ERROR: Failed creating statistics thread "
 				"\"%s\"\n", strerror(errno));
@@ -661,12 +661,12 @@ int main(int argc, char **argv)
 	}
 
 	/* Receive and count packets than drop them */
-	rx_and_process(&cfg, xsk_sockets[0]);
+	rx_and_process(&cfg, xsk_socket]);
 
 	/* Cleanup */
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		xsk_socket__delete(xsk_sockets[sockidx]->xsk);
-	}
+	//for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		xsk_socket__delete(xsk_socket->xsk);
+	//}
 	xsk_umem__delete(umem->umem);
 
 	return EXIT_OK;
