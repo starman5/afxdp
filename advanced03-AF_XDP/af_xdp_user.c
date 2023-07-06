@@ -642,7 +642,7 @@ int main(int argc, char **argv)
 	/* Open and configure the AF_XDP (xsk) sockets */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umem);
-		if (xsk_socket[sockidx] == NULL) {
+		if (xsk_sockets[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
