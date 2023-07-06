@@ -26,7 +26,7 @@ int xdp_sock_prog(struct xdp_md *ctx)
 
     pkt_count = bpf_map_lookup_elem(&xdp_stats_map, &index);
     if (pkt_count) {
-        *pkt_count += 1
+        *pkt_count += 1;
     }
 
     /* A set entry here means that the correspnding queue_id

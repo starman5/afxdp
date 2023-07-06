@@ -34,7 +34,7 @@
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   1
+#define NUM_SOCKETS		   2
 
 static struct xdp_program *prog;
 int xsk_map_fd;
