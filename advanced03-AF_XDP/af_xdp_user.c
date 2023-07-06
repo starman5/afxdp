@@ -34,7 +34,7 @@
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   2
+#define NUM_SOCKETS		   1
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -232,7 +232,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	// I think this should only be done once.  It looks like we are reserving all entries, so we cant
 	// do that twice
 	/* Stuff the receive path with buffers, we assume we have enough */
-	if (numSockets == 1) {
+	//if (numSockets == 1) {
 		ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
 						XSK_RING_PROD__DEFAULT_NUM_DESCS,
 						&idx);
@@ -251,7 +251,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 		xsk_ring_prod__submit(&xsk_info->umem->fq,
 			      	XSK_RING_PROD__DEFAULT_NUM_DESCS);
 		printf("After submit\n");
-	}
+	//}
 
 	return xsk_info;
 
