@@ -197,8 +197,8 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
 	xsk_cfg.xdp_flags = cfg->xdp_flags;
 	xsk_cfg.bind_flags = cfg->xsk_bind_flags;	// TODO: consider this
-	//xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
-	xsk_cfg.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD;
+	xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
+	//xsk_cfg.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD;
 	ret = xsk_socket__create(&xsk_info->xsk, cfg->ifname,
 				 cfg->xsk_if_queue, umem->umem, &xsk_info->rx,
 				 &xsk_info->tx, &xsk_cfg);
@@ -640,14 +640,14 @@ int main(int argc, char **argv)
 	}
 
 	/* Open and configure the AF_XDP (xsk) sockets */
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+	//for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		xsk_socket = xsk_configure_socket(&cfg, umem);
 		if (xsk_socket == NULL) {
 			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-	}
+	//}
 
 	/* Start thread to do statistics display */
 	if (verbose) {
