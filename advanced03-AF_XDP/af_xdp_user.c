@@ -415,7 +415,7 @@ static void rx_and_process(void* args)
 {
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct config *cfg = th_args->cfgptr;
-	struct xsk_socket_info **xsk_sockets = th_args->xski;
+	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 
 	struct pollfd fds[NUM_SOCKETS];
 	int ret = 1;
