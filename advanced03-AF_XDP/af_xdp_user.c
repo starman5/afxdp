@@ -677,9 +677,9 @@ int main(int argc, char **argv)
 	rx_and_process(&cfg, xsk_sockets);
 	printf("After\n");
 	// Wait for all threads to finish
-	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-		pthread_join(threads[th_idx], NULL);
-	}
+	//for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+	//	pthread_join(threads[th_idx], NULL);
+	//}
 
 	/* Cleanup */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
