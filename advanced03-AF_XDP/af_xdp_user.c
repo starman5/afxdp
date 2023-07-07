@@ -35,6 +35,7 @@
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
+#define NUM_THREADS		   1
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -42,6 +43,11 @@ bool custom_xsk = false;
 struct config cfg = {
 	.ifindex   = -1,
 };
+
+struct threadArgs {
+	struct config *cfgptr;
+	struct xsk_socket_info* xski;
+}
 
 struct xsk_umem_info {
 	struct xsk_ring_prod fq;
@@ -134,14 +140,6 @@ static struct xsk_umem_info *configure_xsk_umem(void *buffer, uint64_t size)
 	if (!umem)
 		return NULL;
 
-	/*
-	Allocate another xsk_umem (new_umem)
-	set new_umem->fd = socket(AF_XDP, SOCK_RAW, 0).  Whats this about?
-	set new_umem->umem_area = buffer
-	set new_umem->config = user_config
-	call xsk_create_umem_rings(new_umem, new_umem->fd, fill, comp)
-	fill in user-provided umem (umem->umem) with new_umem
-	*/
 	ret = xsk_umem__create(&umem->umem, buffer, size, &umem->fq, &umem->cq,
 			       NULL);
 	if (ret) {
@@ -179,7 +177,7 @@ static uint64_t xsk_umem_free_frames(struct xsk_socket_info *xsk)
 int numSockets = 0;
 
 static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
-						    struct xsk_umem_info *umem)
+						    struct xsk_umem_info *umem, int queue)
 {
 	struct xsk_socket_config xsk_cfg;
 	struct xsk_socket_info *xsk_info;
@@ -196,19 +194,16 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
 	xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
 	xsk_cfg.xdp_flags = cfg->xdp_flags;
-	xsk_cfg.bind_flags = cfg->xsk_bind_flags;	// TODO: consider this
+	xsk_cfg.bind_flags = cfg->xsk_bind_flags;
 	xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
-	//xsk_cfg.libbpf_flags = XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD;
-	ret = xsk_socket__create(&xsk_info->xsk, cfg->ifname,
-				 cfg->xsk_if_queue, umem->umem, &xsk_info->rx,
-				 &xsk_info->tx, &xsk_cfg);
+	ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname,
+				 queue, umem->umem, &xsk_info->rx,
+				 &xsk_info->tx, umem->fq, umem->cq, xsk_info->&xsk_cfg);
 	if (ret)
 		goto error_exit;
 
 	printf("After creation of a socket\n");
-	++numSockets;
 
-	// TODO: Think about this
 	if (custom_xsk) {
 		ret = xsk_socket__update_xskmap(xsk_info->xsk, xsk_map_fd);
 		if (ret)
@@ -220,7 +215,6 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	}
 	printf("Before initializing umem\n");
 
-	// TODO: Should this be outside?
 	/* Initialize umem frame allocation */
 	for (i = 0; i < NUM_FRAMES; i++)
 		xsk_info->umem_frame_addr[i] = i * FRAME_SIZE;
@@ -228,30 +222,25 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_info->umem_frame_free = NUM_FRAMES;
 	printf("After initializing umem\n");
 
-	// TODO: This is the problem
-	// I think this should only be done once.  It looks like we are reserving all entries, so we cant
-	// do that twice
 	/* Stuff the receive path with buffers, we assume we have enough */
-	if (numSockets == 1) {
-		ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
-						XSK_RING_PROD__DEFAULT_NUM_DESCS,
-						&idx);
+	ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
+					XSK_RING_PROD__DEFAULT_NUM_DESCS,
+					&idx);
 
-		if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
-			goto error_exit;
+	if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
+		goto error_exit;
 	
-		printf("After ring_prod__reserver\n");
+	printf("After ring_prod__reserver\n");
 
-		for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
-			*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
-				xsk_alloc_umem_frame(xsk_info);
+	for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
+		*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
+			xsk_alloc_umem_frame(xsk_info);
 		
-		printf("After for loop\n");
+	printf("After for loop\n");
 
-		xsk_ring_prod__submit(&xsk_info->umem->fq,
-			      	XSK_RING_PROD__DEFAULT_NUM_DESCS);
-		printf("After submit\n");
-	}
+	xsk_ring_prod__submit(&xsk_info->umem->fq,
+			    XSK_RING_PROD__DEFAULT_NUM_DESCS);
+	printf("After submit\n");
 
 	return xsk_info;
 
@@ -377,6 +366,8 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	uint32_t idx_rx = 0, idx_fq = 0;
 	int ret;
 
+	// Check if there is something to consume at all
+	
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
 	if (!rcvd)
 		return;
@@ -421,22 +412,31 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
   }
 
 static void rx_and_process(struct config *cfg,
-			   struct xsk_socket_info *xsk_socket)
+			   struct xsk_socket_info **xsk_sockets)	// maybe also num_sockets arg
 {
-	struct pollfd fds[2];
+	struct pollfd fds[NUM_SOCKETS];
 	int ret, nfds = 1;
 
+	// Initialize file descriptors to be waited on
 	memset(fds, 0, sizeof(fds));
-	fds[0].fd = xsk_socket__fd(xsk_socket->xsk);
-	fds[0].events = POLLIN;
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		fds[sockidx].fd = xsk_socket__fd(xsk_sockets[sockidx]->xsk);
+		fds[sockidx].events = POLLIN;
+	}
 
 	while(!global_exit) {
 		if (cfg->xsk_poll_mode) {
-			ret = poll(fds, nfds, -1);
+			ret = poll(fds, NUM_SOCKETS, -1);
 			if (ret <= 0 || ret > 1)
 				continue;
 		}
-		handle_receive_packets(xsk_socket);
+
+		// Check for events on each socket
+		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+			if (fds[sockidx].revents & POLLIN) {
+				handle_receive_packets(xsk_socket);
+			}
+		}
 	}
 }
 
@@ -548,9 +548,8 @@ int main(int argc, char **argv)
 	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
 	DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
-	struct xsk_umem_info *umem;
+	struct xsk_umem_info *umems[NUM_SOCKETS];
 	struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
-	//struct xsk_socket_info* xsk_socket;
 	pthread_t stats_poll_thread;
 	int err;
 	char errmsg[1024];
@@ -632,16 +631,18 @@ int main(int argc, char **argv)
 	}
 
 	/* Initialize shared packet_buffer for umem usage */
-	umem = configure_xsk_umem(packet_buffer, packet_buffer_size);
-	if (umem == NULL) {
-		fprintf(stderr, "ERROR: Can't create umem \"%s\"\n",
-			strerror(errno));
-		exit(EXIT_FAILURE);
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		umems[sockidx] = configure_xsk_umem(packet_buffer, packet_buffer_size);
+		if (umem == NULL) {
+			fprintf(stderr, "ERROR: Can't create umem \"%s\"\n",
+				strerror(errno));
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	/* Open and configure the AF_XDP (xsk) sockets */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umem);
+		xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], sockidx);
 		if (xsk_sockets[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
 				strerror(errno));
@@ -661,7 +662,18 @@ int main(int argc, char **argv)
 	}
 
 	/* Receive and count packets than drop them */
-	rx_and_process(&cfg, xsk_sockets[0]);
+	pthread_t threads[NUM_THREADS];
+	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		struct threadArgs* args;
+		args->cfgptr = &cfg;
+		args->xski = xsk_sockets[th_idx];
+		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, &threadArgs);
+	}
+
+	// Wait for all threads to finish
+	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		pthread_join(threads[th_idx], NULL);
+	}
 
 	/* Cleanup */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
