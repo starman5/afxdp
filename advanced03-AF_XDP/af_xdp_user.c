@@ -666,11 +666,11 @@ int main(int argc, char **argv)
 
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
+	struct threadArgs* argsArr[NUM_THREADS];
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-		struct threadArgs* args;
-		args->cfgptr = &cfg;
-		args->xski = xsk_sockets[th_idx];
-		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, args);
+		argsArr[th_idx]->cfgptr = &cfg;
+		argsArr[th_idx]->xski = xsk_sockets[th_idx];
+		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, argsArr[th_idx]);
 	}
 
 	// Wait for all threads to finish
