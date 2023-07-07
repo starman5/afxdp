@@ -418,7 +418,7 @@ static void rx_and_process(void* args)
 	struct xsk_socket_info **xsk_sockets = th_args->xski;
 
 	struct pollfd fds[NUM_SOCKETS];
-	int ret, nfds = 1;
+	int ret = 1;
 
 	// Initialize file descriptors to be waited on
 	memset(fds, 0, sizeof(fds));
@@ -636,7 +636,7 @@ int main(int argc, char **argv)
 	/* Initialize shared packet_buffer for umem usage */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		umems[sockidx] = configure_xsk_umem(packet_buffer, packet_buffer_size);
-		if (umem[sockidx] == NULL) {
+		if (umems[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't create umem \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
