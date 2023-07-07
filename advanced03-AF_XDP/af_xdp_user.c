@@ -653,6 +653,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	printf("Before stat\n");
 	/* Start thread to do statistics display */
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
@@ -663,16 +664,17 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
-
+	printf("After stat\n");
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 	struct threadArgs* args;
 	args->cfgptr = &cfg;
 	args->xskis = xsk_sockets;
+	printf("r\n");
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, args);
 	}
-
+	printf("After creating threads\n");
 	// Wait for all threads to finish
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		pthread_join(threads[th_idx], NULL);
