@@ -34,7 +34,7 @@
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   1
+#define NUM_SOCKETS		   2
 #define NUM_THREADS		   1
 
 static struct xdp_program *prog;
@@ -666,16 +666,12 @@ int main(int argc, char **argv)
 	printf("After stat\n");
 	/* Receive and count packets than drop them */
 	/*pthread_t threads[NUM_THREADS];
-	printf("f\n");
 	struct threadArgs* th_args;
-	printf("g\n");
 	th_args->xskis = xsk_sockets;
-	printf("r\n");*/
 	//for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		//ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	//}
 	rx_and_process(&cfg, xsk_sockets);
-	printf("After\n");
 	// Wait for all threads to finish
 	//for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 	//	pthread_join(threads[th_idx], NULL);
