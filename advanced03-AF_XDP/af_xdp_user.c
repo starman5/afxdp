@@ -669,8 +669,8 @@ int main(int argc, char **argv)
 	printf("After stat\n");
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
-	struct threadArgs* th_args = malloc(sizeof(threadArgs));
-	memset(th_args, 0, sizeof(threadArgs));
+	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
+	memset(th_args, 0, sizeof(struct threadArgs));
 	th_args->xskis = xsk_sockets;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
