@@ -667,8 +667,10 @@ int main(int argc, char **argv)
 	printf("After stat\n");
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
+	printf("f\n");
 	struct threadArgs* args;
 	args->cfgptr = &cfg;
+	printf("g\n");
 	args->xskis = xsk_sockets;
 	printf("r\n");
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
