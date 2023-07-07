@@ -410,11 +410,13 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	complete_tx(xsk);
   }
 
-static void rx_and_process(struct config* cfg,
-						   struct xsk_socket_info **xsk_sockets)
+//static void rx_and_process(struct config* cfg,
+//						   struct xsk_socket_info **xsk_sockets)
+
+static void rx_and_process(void* args)
 {
-	//struct threadArgs* th_args = (struct threadArgs*)args;
-	//struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	struct threadArgs* th_args = (struct threadArgs*)args;
+	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 
 	struct pollfd fds[NUM_SOCKETS];
 	int ret = 1;
@@ -427,7 +429,8 @@ static void rx_and_process(struct config* cfg,
 	}
 
 	while(!global_exit) {
-		if (cfg->xsk_poll_mode) {
+		//if (cfg->xsk_poll_mode) {
+		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, NUM_SOCKETS, -1);
 			if (ret <= 0 || ret > 1)
 				continue;
@@ -665,17 +668,17 @@ int main(int argc, char **argv)
 	}
 	printf("After stat\n");
 	/* Receive and count packets than drop them */
-	//pthread_t threads[NUM_THREADS];
-	//struct threadArgs* th_args;
-	//th_args->xskis = xsk_sockets;
-	//for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-		//ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
-	//}
-	rx_and_process(&cfg, xsk_sockets);
+	pthread_t threads[NUM_THREADS];
+	struct threadArgs* th_args;
+	th_args->xskis = xsk_sockets;
+	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
+	}
+	//rx_and_process(&cfg, xsk_sockets);
 	// Wait for all threads to finish
-	//for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-	//	pthread_join(threads[th_idx], NULL);
-	//}
+	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		pthread_join(threads[th_idx], NULL);
+	}
 
 	/* Cleanup */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
