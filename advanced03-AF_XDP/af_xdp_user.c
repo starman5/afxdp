@@ -681,8 +681,8 @@ int main(int argc, char **argv)
 	/* Cleanup */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		xsk_socket__delete(xsk_sockets[sockidx]->xsk);
+		xsk_umem__delete(umems[sockidx]->umem);
 	}
-	xsk_umem__delete(umem->umem);
 
 	return EXIT_OK;
 }
