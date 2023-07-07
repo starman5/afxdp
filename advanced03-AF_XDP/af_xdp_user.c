@@ -46,8 +46,8 @@ struct config cfg = {
 
 struct threadArgs {
 	struct config *cfgptr;
-	struct xsk_socket_info* xski;
-}
+	struct xsk_socket_info** xski;
+};
 
 struct xsk_umem_info {
 	struct xsk_ring_prod fq;
@@ -198,7 +198,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
 	ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname,
 				 queue, umem->umem, &xsk_info->rx,
-				 &xsk_info->tx, umem->fq, umem->cq, xsk_info->&xsk_cfg);
+				 &xsk_info->tx, &umem->fq, &umem->cq, &xsk_cfg);
 	if (ret)
 		goto error_exit;
 
@@ -411,9 +411,12 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	complete_tx(xsk);
   }
 
-static void rx_and_process(struct config *cfg,
-			   struct xsk_socket_info **xsk_sockets)	// maybe also num_sockets arg
+static void rx_and_process(void* args)
 {
+	struct threadArgs* th_args = (struct threadArgs*)args;
+	struct config *cfg = th_args->cfgptr;
+	struct xsk_socket_info **xsk_sockets = th_args->xski;
+
 	struct pollfd fds[NUM_SOCKETS];
 	int ret, nfds = 1;
 
@@ -434,7 +437,7 @@ static void rx_and_process(struct config *cfg,
 		// Check for events on each socket
 		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 			if (fds[sockidx].revents & POLLIN) {
-				handle_receive_packets(xsk_socket);
+				handle_receive_packets(xsk_sockets[sockidx]);
 			}
 		}
 	}
@@ -633,7 +636,7 @@ int main(int argc, char **argv)
 	/* Initialize shared packet_buffer for umem usage */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		umems[sockidx] = configure_xsk_umem(packet_buffer, packet_buffer_size);
-		if (umem == NULL) {
+		if (umem[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't create umem \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
@@ -667,7 +670,7 @@ int main(int argc, char **argv)
 		struct threadArgs* args;
 		args->cfgptr = &cfg;
 		args->xski = xsk_sockets[th_idx];
-		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, &threadArgs);
+		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, args);
 	}
 
 	// Wait for all threads to finish
