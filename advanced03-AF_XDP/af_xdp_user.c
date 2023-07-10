@@ -439,11 +439,14 @@ static void rx_and_process(void* args)
 	while(!global_exit) {
 		//if (cfg->xsk_poll_mode) {
 		if (cfg.xsk_poll_mode) {
+			printf("begin polling\n");
 			ret = poll(fds, NUM_SOCKETS, -1);
+			printf("done polling\n");
 			if (ret <= 0 || ret > 1)
 				continue;
 		}
 
+		printf("checking for events\n");
 		// Check for events on each socket
 		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 			if (fds[sockidx].revents & POLLIN) {
