@@ -1,5 +1,15 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 
+
+/*
+This is a general AF_XDP userspace program that can make use of any number of sockets,
+corresponding to any number of NIC rx queues, as well as any number of threads to poll
+on these sockets.  Completely reusable code for any use case.  Simply update the handle_packet()
+function accordingly
+*/
+
+
+
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
@@ -173,8 +183,6 @@ static uint64_t xsk_umem_free_frames(struct xsk_socket_info *xsk)
 	return xsk->umem_frame_free;
 }
 
-int numSockets = 0;
-
 static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 						    struct xsk_umem_info *umem, int queue)
 {
@@ -219,7 +227,6 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 		xsk_info->umem_frame_addr[i] = i * FRAME_SIZE;
 
 	xsk_info->umem_frame_free = NUM_FRAMES;
-	printf("After initializing umem\n");
 
 	/* Stuff the receive path with buffers, we assume we have enough */
 	ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
@@ -298,14 +305,13 @@ static bool process_packet(struct xsk_socket_info *xsk,
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-    /* Lesson#3: Write an IPv6 ICMP ECHO parser to send responses
-	 *
-	 * Some assumptions to make it easier:
-	 * - No VLAN handling
-	 * - Only if nexthdr is ICMP
-	 * - Just return all data with MAC/IP swapped, and type set to
-	 *   ICMPV6_ECHO_REPLY
-	 * - Recalculate the icmp checksum */
+    /*
+	
+	Put whatever you want here, depending on use case
+
+	*/
+
+	printf("Received packet\n");
 
 	if (false) {
 		int ret;
@@ -655,7 +661,6 @@ int main(int argc, char **argv)
 		}
 	}
 
-	printf("Before stat\n");
 	/* Start thread to do statistics display */
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
@@ -666,7 +671,7 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
-	printf("After stat\n");
+	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
@@ -675,7 +680,7 @@ int main(int argc, char **argv)
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
-	//rx_and_process(&cfg, xsk_sockets);
+	
 	// Wait for all threads to finish
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		pthread_join(threads[th_idx], NULL);
