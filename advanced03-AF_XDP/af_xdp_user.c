@@ -679,9 +679,14 @@ int main(int argc, char **argv)
 	// print out all entries of xsk map, for debugging
 	printf("XSK Map:\n");
 	void *value;
+	int ret;
 	for (__u32 key = 0; key < 20; ++key) {
-		if (bpf_map_lookup_elem(xsk_map_fd, &key, &value) == 0) {
+		ret = bpf_map_lookup_elem(xsk_map_fd, &key, value
+		if (ret == 0) {
 			printf("Entry[%u]: %p\n", key, value);
+		}
+		else {
+			printf("ret: %d\n", ret);
 		}
 	}
 
