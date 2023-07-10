@@ -370,7 +370,6 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
 {
-	printf("handle receive packets\n");
 	unsigned int rcvd, stock_frames, i;
 	uint32_t idx_rx = 0, idx_fq = 0;
 	int ret;
@@ -380,6 +379,8 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
 	if (!rcvd)
 		return;
+
+	printf("Something to consume\n");
 
 	/* Stuff the ring with as much frames as possible */
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
@@ -428,15 +429,24 @@ static void rx_and_process(void* args)
 	printf("rx and process\n");
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
-	
-	// Debugging
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		struct xsk_socket_info* xski = xsk_sockets[sockidx];
-		struct xsk_socket* xsk = xski->xsk;
-		printf("socket fd: %d\n", xsk_socket__fd(xsk));
+
+	struct pollfd fds[2];
+	int ret, nfds = 1;
+
+	memset(fds, 0, sizeof(fds));
+	fds[0].fd = xsk_socket__fd(xsk_sockets[0]->xsk);
+	fds[0].events = POLLIN;
+
+	while (!global_exit) {
+		if (cfg.xsk_poll_mode) {
+			ret = poll(fds, nfds, -1);
+			if (ret <= 0 || ret > 1)
+				continue;
+		}
+		handle_receive_packets(xsk_sockets[0]);
 	}
 
-	struct pollfd fds[NUM_SOCKETS];
+	/*struct pollfd fds[NUM_SOCKETS];
 	int ret = 1;
 
 	// Initialize file descriptors to be waited on
@@ -452,19 +462,22 @@ static void rx_and_process(void* args)
 			printf("begin polling\n");
 			ret = poll(fds, NUM_SOCKETS, -1);
 			printf("done polling\n");
-			if (ret <= 0 || ret > 1)
+			if (ret <= 0)
 				continue;
 		}
 
-		//printf("checking for events\n");
+		printf("checking for events\n");
 		// Check for events on each socket
-		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-			if (fds[sockidx].revents & POLLIN) {
-				printf("found event\n");
-				handle_receive_packets(xsk_sockets[sockidx]);
+		for (int socki = 0; socki < NUM_SOCKETS; ++socki) {
+			if (fds[socki].revents != 0) {
+				printf("There is something\n");
+				if (fds[socki].revents & POLLIN) {
+					printf("found event\n");
+					handle_receive_packets(xsk_sockets[socki]);
+				}
 			}
 		}
-	}
+	}*/
 }
 
 #define NANOSEC_PER_SEC 1000000000 /* 10^9 */
@@ -677,16 +690,6 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
-
-	// print out all entries of xsk map, for debugging
-	printf("XSK Map: %d\n", xsk_map_fd);
-	__u32 key = 0;
-    void *value;
-    while (bpf_map_lookup_elem(xsk_map_fd, &key, &value) == 0) {
-        // Process and print the retrieved entry
-        printf("Entry[%u]: %p\n", key, value);
-        key++;
-    }
 
 	/* Start thread to do statistics display */
 	/*
