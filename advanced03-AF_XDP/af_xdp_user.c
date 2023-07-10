@@ -367,6 +367,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
 {
+	printf("handle receive packets\n");
 	unsigned int rcvd, stock_frames, i;
 	uint32_t idx_rx = 0, idx_fq = 0;
 	int ret;
@@ -421,6 +422,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 
 static void rx_and_process(void* args)
 {
+	printf("rx and process\n");
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 
@@ -662,6 +664,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Start thread to do statistics display */
+	/*
 	if (verbose) {
 		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
 				     xsk_sockets[0]);
@@ -671,6 +674,7 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
+	*/
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
