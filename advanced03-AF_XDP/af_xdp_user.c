@@ -447,10 +447,11 @@ static void rx_and_process(void* args)
 				continue;
 		}
 
-		printf("checking for events\n");
+		//printf("checking for events\n");
 		// Check for events on each socket
 		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 			if (fds[sockidx].revents & POLLIN) {
+				printf("found event\n");
 				handle_receive_packets(xsk_sockets[sockidx]);
 			}
 		}
