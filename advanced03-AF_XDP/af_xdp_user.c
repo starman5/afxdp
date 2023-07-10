@@ -213,7 +213,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 
 	if (custom_xsk) {
 		ret = xsk_socket__update_xskmap(xsk_info->xsk, xsk_map_fd);
-		printf("fd: %d\n", xsk_map_fd);
+		printf("updating xskmap with fd: %d\n", xsk_map_fd);
 		if (ret)
 			goto error_exit;
 	} else {
@@ -622,6 +622,7 @@ int main(int argc, char **argv)
 		/* We also need to load the xsks_map */
 		map = bpf_object__find_map_by_name(xdp_program__bpf_obj(prog), "xsks_map");
 		xsk_map_fd = bpf_map__fd(map);
+		printf("correct xsk_map_fd: %d\n", xsk_map_fd);
 		if (xsk_map_fd < 0) {
 			fprintf(stderr, "ERROR: no xsks map found: %s\n",
 				strerror(xsk_map_fd));
