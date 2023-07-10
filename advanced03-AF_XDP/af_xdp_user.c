@@ -681,7 +681,7 @@ int main(int argc, char **argv)
 	void *value;
 	int ret;
 	for (__u32 key = 0; key < 20; ++key) {
-		ret = bpf_map_lookup_elem(xsk_map_fd, &key, value
+		ret = bpf_map_lookup_elem(xsk_map_fd, &key, value);
 		if (ret == 0) {
 			printf("Entry[%u]: %p\n", key, value);
 		}
