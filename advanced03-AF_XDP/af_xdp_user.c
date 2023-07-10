@@ -431,22 +431,13 @@ static void rx_and_process(void* args)
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		struct xsk_socket_info* xski = xsk_sockets[sockidx];
 		struct xsk_socket* xsk = xski->xsk;
-		int sockfd = xsk->fd;
-		printf("socket fd: %d\n", sockfd);
+		printf("socket fd: %d\n", xsk_socket__fd(xsk));
 
-		struct xsk_ctx *sock_ctx = xsk->ctx;
-		int ctx_fd = sock_ctx->xsks_map_fd;
-		printf("ctx thinks that xsks_map_fd is: %d\n", ctx_fd);
-		printf("ctx queue id: %d\n", sock_ctx->queue_id);
-		printf("ctx refcount: %d\n", sock_ctx->refcount);
-		printf("ctx ifindex: %d\n", sock_ctx->ifindex);
-		printf("ctx map refcount: %d\n", sock_ctx->refcnt_map_fd);
-
-		struct xsk_umem *sock_umem = sock_ctx->umem;
-		printf("umem area: %p\n", sock_umem->umem_area);
-		printf("umem fd: %d\n", sock_umem->fd);
-		printf("umem refcount: %d\n", sock_umem->recount);
-		printf("\n");
+		struct xsk_ring_cons *rx = &xsk->rx;
+		struct xsk_ring_prod *tx = &xsk->tx;
+		uint32_t queue_id_rx = rx->queue_id;
+		uint32_t queue_id_tx = tx->queue_id;
+		printf("rx queue id: %d  tx queue id: %d\n", queue_id_rx, queue_id_tx);
 
 	}
 
