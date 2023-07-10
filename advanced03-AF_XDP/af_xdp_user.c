@@ -214,6 +214,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	if (custom_xsk) {
 		ret = xsk_socket__update_xskmap(xsk_info->xsk, xsk_map_fd);
 		printf("updating xskmap with fd: %d\n", xsk_map_fd);
+		printf("xsk_info->xsk: %d\n", xsk_socket__fd(xsk_info->xsk));
 		if (ret)
 			goto error_exit;
 	} else {
