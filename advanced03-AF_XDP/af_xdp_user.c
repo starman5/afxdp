@@ -433,11 +433,13 @@ static void rx_and_process(void* args)
 		struct xsk_socket* xsk = xski->xsk;
 		printf("socket fd: %d\n", xsk_socket__fd(xsk));
 
-		struct xsk_ring_cons *rx = &xsk->rx;
-		struct xsk_ring_prod *tx = &xsk->tx;
-		uint32_t queue_id_rx = rx->queue_id;
-		uint32_t queue_id_tx = tx->queue_id;
-		printf("rx queue id: %d  tx queue id: %d\n", queue_id_rx, queue_id_tx);
+		struct xsk_ctx *ctx_rx = xsk_socket__get_rx_ring(xsk);
+		uint32_t queue_id_rx = xsk_ring_cons__queue_id(&ctx_rx->rx);
+		int xsks_map_fd = xsk_ctx__fd(ctx_rx->umem->xsks_map);
+		int ifindex = xsk_socket__ifindex(xsk);
+
+
+
 
 	}
 
