@@ -443,11 +443,19 @@ static void rx_and_process(void* args)
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, nfds, -1);
-			if (ret <= 0 || ret > 1)
+			if (ret <= 0)
 				continue;
+			// Handle packets on the ready sockets
+			for (int socki = 0; socki < NUM_SOCKETS; ++socki) {
+				if (fds[socki].revents & POLLIN) {
+					handle_receive_packets(xsk_sockets[socki]);
+				}
+			}
 		}
-		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-			handle_receive_packets(xsk_sockets[sockidx]);
+		else {
+			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+				handle_receive_packets(xsk_sockets[sockidx]);
+			}
 		}
 	}
 
