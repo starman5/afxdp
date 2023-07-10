@@ -679,7 +679,7 @@ int main(int argc, char **argv)
 	}
 
 	// print out all entries of xsk map, for debugging
-	printf("XSK Map:\n");
+	printf("XSK Map: %d\n", xsk_map_fd);
 	void *value;
 	int return_val;
 	for (__u32 key = 0; key < 20; ++key) {
