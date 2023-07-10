@@ -688,7 +688,8 @@ int main(int argc, char **argv)
 			printf("Entry[%u]: %p\n", key, value);
 		}
 		else {
-			printf("ret: %d\n", return_val);
+			fprintf(stderr, "ERROR: "
+				"\"%s\"\n", strerror(errno));
 		}
 	}
 
