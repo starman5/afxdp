@@ -426,6 +426,29 @@ static void rx_and_process(void* args)
 	printf("rx and process\n");
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	
+	// Debugging
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++i) {
+		struct xsk_socket_info* xski = xsk_sockets[sockidx];
+		struct xsk_socket* xsk = xski->xsk;
+		int sockfd = xsk->fd;
+		printf("socket fd: %d\n", sockfd);
+
+		struct xsk_ctx *sock_ctx = xsk->ctx;
+		int ctx_fd = sock_ctx->xsks_map_fd;
+		printf("ctx thinks that xsks_map_fd is: %d\n", ctx_fd);
+		printf("ctx queue id: %d\n", sock_ctx->queue_id);
+		printf("ctx refcount: %d\n", sock_ctx->refcount);
+		printf("ctx ifindex: %d\n", sock_ctx->ifindex);
+		printf("ctx map refcount: %d\n", sock_ctx->refcnt_map_fd);
+
+		struct xsk_umem *sock_umem = sock_ctx->umem;
+		printf("umem area: %p\n", sock_umem->umem_area);
+		printf("umem fd: %d\n", sock_umem->fd);
+		printf("umem refcount: %d\n", sock_umem->recount);
+		printf("\n");
+
+	}
 
 	struct pollfd fds[NUM_SOCKETS];
 	int ret = 1;
