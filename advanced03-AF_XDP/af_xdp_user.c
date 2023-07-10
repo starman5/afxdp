@@ -197,7 +197,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	if (!xsk_info)
 		return NULL;
 
-	__u32 queue_id = 0;
+	__u32 queue_id = 1 * queue;
 	xsk_info->umem = umem;
 	xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
 	xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
