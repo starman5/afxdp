@@ -680,18 +680,13 @@ int main(int argc, char **argv)
 
 	// print out all entries of xsk map, for debugging
 	printf("XSK Map: %d\n", xsk_map_fd);
-	void *value;
-	int return_val;
-	for (__u32 key = 0; key < 20; ++key) {
-		return_val = bpf_map_lookup_elem(xsk_map_fd, &key, value);
-		if (return_val == 0) {
-			printf("Entry[%u]: %p\n", key, value);
-		}
-		else {
-			fprintf(stderr, "ERROR: "
-				"\"%s\"\n", strerror(errno));
-		}
-	}
+	__u32 key = 0;
+    void *value;
+    while (bpf_map_lookup_elem(xsk_map_fd, &key, &value) == 0) {
+        // Process and print the retrieved entry
+        printf("Entry[%u]: %p\n", key, value);
+        key++;
+    }
 
 	/* Start thread to do statistics display */
 	/*
