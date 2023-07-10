@@ -428,7 +428,7 @@ static void rx_and_process(void* args)
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 	
 	// Debugging
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++i) {
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		struct xsk_socket_info* xski = xsk_sockets[sockidx];
 		struct xsk_socket* xsk = xski->xsk;
 		int sockfd = xsk->fd;
