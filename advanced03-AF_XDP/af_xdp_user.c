@@ -432,12 +432,6 @@ static void rx_and_process(void* args)
 		struct xsk_socket_info* xski = xsk_sockets[sockidx];
 		struct xsk_socket* xsk = xski->xsk;
 		printf("socket fd: %d\n", xsk_socket__fd(xsk));
-
-		struct xsk_ctx *ctx_rx = xsk_socket__get_rx_ring(xsk);
-
-
-
-
 	}
 
 	struct pollfd fds[NUM_SOCKETS];
