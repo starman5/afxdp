@@ -44,7 +44,7 @@ function accordingly
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   1
+#define NUM_SOCKETS		   2
 #define NUM_THREADS		   1
 
 static struct xdp_program *prog;
@@ -430,12 +430,15 @@ static void rx_and_process(void* args)
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 
-	struct pollfd fds[1];
-	int ret, nfds = 1;
+	struct pollfd fds[NUM_SOCKETS];
+	int ret = 1;
+	int nfds = NUM_SOCKETS;
 
 	memset(fds, 0, sizeof(fds));
-	fds[0].fd = xsk_socket__fd(xsk_sockets[0]->xsk);
-	fds[0].events = POLLIN;
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		fds[sockidx].fd = xsk_socket__fd(xsk_sockets[sockidx]->xsk);
+		fds[sockidx].events = POLLIN;
+	}
 
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
@@ -443,7 +446,9 @@ static void rx_and_process(void* args)
 			if (ret <= 0 || ret > 1)
 				continue;
 		}
-		handle_receive_packets(xsk_sockets[0]);
+		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+			handle_receive_packets(xsk_sockets[sockidx]);
+		}
 	}
 
 	/*struct pollfd fds[NUM_SOCKETS];
