@@ -213,6 +213,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 
 	if (custom_xsk) {
 		ret = xsk_socket__update_xskmap(xsk_info->xsk, xsk_map_fd);
+		printf("fd: %d\n", xsk_map_fd);
 		if (ret)
 			goto error_exit;
 	} else {
@@ -682,7 +683,7 @@ int main(int argc, char **argv)
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
-	memset(th_args, 0, sizeof(struct threadArgs));
+	//memset(th_args, 0, sizeof(struct threadArgs));
 	th_args->xskis = xsk_sockets;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
