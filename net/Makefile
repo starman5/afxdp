@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -O3 -Wall -Wextra -pthread
 
-all: server client
+all: server client tiny_client
 
 server:
 	$(CC) $(CFLAGS) -o server server.c
@@ -9,5 +9,8 @@ server:
 client:
 	$(CC) $(CFLAGS) -o client client.c
 
+tiny_client:
+	$(CC) $(CFLAGS) -o tiny_client tiny_client.c
+
 clean:
-	rm -rf server client
+	rm -rf server client tiny_client
