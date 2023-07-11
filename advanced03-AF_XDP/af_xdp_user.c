@@ -56,6 +56,7 @@ struct config cfg = {
 
 struct threadArgs {
 	struct xsk_socket_info** xskis;
+	int idx;
 };
 
 struct xsk_umem_info {
@@ -429,16 +430,19 @@ static void rx_and_process(void* args)
 	printf("rx and process\n");
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	int idx = th_args->idx;
 
-	struct pollfd fds[NUM_SOCKETS];
+	struct pollfd fds[1];
 	int ret = 1;
-	int nfds = NUM_SOCKETS;
+	int nfds = 1;
 
 	memset(fds, 0, sizeof(fds));
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+	fds[0].fd = xsk_socket__fd(xsk_sockets[idx]->xsk);
+	fds[0].events = POLLIN;
+	/*for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		fds[sockidx].fd = xsk_socket__fd(xsk_sockets[sockidx]->xsk);
 		fds[sockidx].events = POLLIN;
-	}
+	}*/
 
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
@@ -446,16 +450,14 @@ static void rx_and_process(void* args)
 			if (ret <= 0)
 				continue;
 			// Handle packets on the ready sockets
-			for (int socki = 0; socki < NUM_SOCKETS; ++socki) {
+			for (int socki = 0; socki < fds; ++socki) {
 				if (fds[socki].revents & POLLIN) {
 					handle_receive_packets(xsk_sockets[socki]);
 				}
 			}
 		}
 		else {
-			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-				handle_receive_packets(xsk_sockets[sockidx]);
-			}
+			handle_receive_packets(xsk_sockets[idx]);
 		}
 	}
 
@@ -719,10 +721,10 @@ int main(int argc, char **argv)
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
-	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
-	//memset(th_args, 0, sizeof(struct threadArgs));
-	th_args->xskis = xsk_sockets;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
+		th_args->xskis = xsk_sockets;
+		th_args->idx = th_idx;
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
 	
