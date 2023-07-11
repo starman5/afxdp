@@ -45,7 +45,7 @@ function accordingly
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   4
-#define NUM_THREADS		   1
+#define NUM_THREADS		   4
 
 static struct xdp_program *prog;
 int xsk_map_fd;
