@@ -28,8 +28,7 @@ int xdp_sock_prog(struct xdp_md *ctx)
     if (pkt_count) {
 
         /* We pass every other packet */
-        if ((*pkt_count)++ & 1)
-            return XDP_PASS;
+        (*pkt_count)++;
     }
 
     /* A set entry here means that the correspnding queue_id
