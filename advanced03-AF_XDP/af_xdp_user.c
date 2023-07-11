@@ -44,8 +44,8 @@ function accordingly
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   4
-#define NUM_THREADS		   4
+#define NUM_SOCKETS		   20
+#define NUM_THREADS		   1
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -56,7 +56,6 @@ struct config cfg = {
 
 struct threadArgs {
 	struct xsk_socket_info** xskis;
-	int idx;
 };
 
 struct xsk_umem_info {
@@ -434,15 +433,13 @@ static void rx_and_process(void* args)
 
 	struct pollfd fds[1];
 	int ret = 1;
-	int nfds = 1;
+	int nfds = NUM_SOCKETS;
 
 	memset(fds, 0, sizeof(fds));
-	fds[0].fd = xsk_socket__fd(xsk_sockets[idx]->xsk);
-	fds[0].events = POLLIN;
-	/*for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		fds[sockidx].fd = xsk_socket__fd(xsk_sockets[sockidx]->xsk);
 		fds[sockidx].events = POLLIN;
-	}*/
+	}
 
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
@@ -450,14 +447,16 @@ static void rx_and_process(void* args)
 			if (ret <= 0)
 				continue;
 			// Handle packets on the ready sockets
-			for (int socki = 0; socki < fds; ++socki) {
+			for (int socki = 0; socki < nfds; ++socki) {
 				if (fds[socki].revents & POLLIN) {
 					handle_receive_packets(xsk_sockets[socki]);
 				}
 			}
 		}
 		else {
-			handle_receive_packets(xsk_sockets[idx]);
+			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+				handle_receive_packets(xsk_sockets[sockidx]);
+			}
 		}
 	}
 
