@@ -46,147 +46,6 @@ function accordingly
 #define NUM_SOCKETS		   20
 #define NUM_THREADS		   1
 
-#define MAX_BUFFER_SIZE 1024
-#define SERVER_PORT 8889
-#define TABLE_SIZE  10000
-#define CACHE_LINE_SIZE 64
-
-// Commands to integer conversions for serializing messages
-#define NON     5
-#define SET     6
-#define GET     7
-#define DEL     8 
-#define END     9
-
-size_t global_count = 0;
-
-typedef struct node {
-    uint64_t key;
-    char* value;
-    struct node* next;
-} Node;
-
-// For counting the number of processed requests
-// (with padding to prevent false sharing)
-typedef struct counter {
-    uint64_t count;
-    char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
-} Counter;
-
-typedef struct spinlock {
-    pthread_spinlock_t lock;
-    char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
-} Spinlock;
-
-
-// Convenient wrapper to pin a thread to a core
-int pin_thread_to_core(int core_id) {
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset);
-
-    return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-}
-
-// Simple hash function for unsigned integers
-uint64_t hash_key(uint64_t key) {
-    return key % TABLE_SIZE;
-}
-
-void initialize_hashtable(Node** hashtable) {
-    for (int i = 0; i < TABLE_SIZE; ++i) {
-        hashtable[i] = NULL;
-    }
-}
-
-void hashtable_cleanup(Node** hashtable) {
-    for (int i = 0; i < TABLE_SIZE; ++i) {
-        Node* head = hashtable[i];
-        while (head) {
-            Node* tmp = head;
-            head = head->next;
-            free(tmp->value);
-            free(tmp);
-        }
-    }
-}
-
-void table_set(Node** hashtable, uint64_t key, char* value, Spinlock* locks) {
-    uint64_t hash = hash_key(key);
-    pthread_spin_lock(&locks[hash].lock);
-    Node* head = hashtable[hash];
-    
-    // Look for key in hashtable
-    bool found = false;
-    while (head) {
-        if (head->key == key) {
-            head->value = value;
-            found = true;
-            break;
-        }
-        head = head->next;
-    }
-    if (found) {
-        pthread_spin_unlock(&locks[hash].lock);
-        return;
-    }
-
-    // If we didn't find the key, then add new node to head of linked list in O(1)
-    Node* new_node = malloc(sizeof(Node));
-    new_node->next = head;
-    new_node->key = key;
-    new_node->value = value;
-    hashtable[hash] = new_node;
-    pthread_spin_unlock(&locks[hash].lock);
-}
-
-char* table_get(Node** hashtable, uint64_t key, Spinlock* locks) {
-    uint64_t hash = hash_key(key);
-    pthread_spin_lock(&locks[hash].lock);
-    Node* head = hashtable[hash];
-    while (head) {
-        if (head->key == key) {
-            pthread_spin_unlock(&locks[hash].lock);
-            return head->value;
-        }
-        head = head->next;
-    }
-    pthread_spin_unlock(&locks[hash].lock);
-    return NULL;
-}
-
-void table_delete(Node** hashtable, uint64_t key, Spinlock* locks) {   
-    uint64_t hash = hash_key(key);
-    pthread_spin_lock(&locks[hash].lock);
-    Node* curr = hashtable[hash];
-    Node* prev = curr;
-    if (!curr) {
-        printf("Cannot delete from empty list\n");
-    }
-
-    // Delete first node in linked list
-    if (curr->key == key) {
-        hashtable[hash] = curr->next;
-        pthread_spin_unlock(&locks[hash].lock);
-        return;
-    }
-
-    curr = curr->next;
-    while (curr) {
-        if (curr->key == key) {
-            prev->next = curr->next;
-            free(curr);
-            pthread_spin_unlock(&locks[hash].lock);
-            return;
-        }
-
-        curr = curr->next;
-        prev = prev->next;
-    }
-    pthread_spin_unlock(&locks[hash].lock);
-}
-
-
 static struct xdp_program *prog;
 int xsk_map_fd;
 bool custom_xsk = false;
@@ -196,10 +55,6 @@ struct config cfg = {
 
 struct threadArgs {
 	struct xsk_socket_info** xskis;
-	Node** hashtable;
-    Counter* countArr;
-    Spinlock* locks;
-    int core_id;
 };
 
 struct xsk_umem_info {
@@ -458,7 +313,6 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	*/
 
-	++global_count;
 	printf("Received packet\n");
 
 	if (false) {
@@ -513,7 +367,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	return false;
 }
 
-static void handle_receive_packets(struct xsk_socket_info *xsk, struct threadArgs* th_args)
+static void handle_receive_packets(struct xsk_socket_info *xsk)
 {
 	unsigned int rcvd, stock_frames, i;
 	uint32_t idx_rx = 0, idx_fq = 0;
@@ -575,7 +429,6 @@ static void rx_and_process(void* args)
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 
-
 	struct pollfd fds[1];
 	int ret = 1;
 	int nfds = NUM_SOCKETS;
@@ -594,13 +447,13 @@ static void rx_and_process(void* args)
 			// Handle packets on the ready sockets
 			for (int socki = 0; socki < nfds; ++socki) {
 				if (fds[socki].revents & POLLIN) {
-					handle_receive_packets(xsk_sockets[socki], th_args);
+					handle_receive_packets(xsk_sockets[socki]);
 				}
 			}
 		}
 		else {
 			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-				handle_receive_packets(xsk_sockets[sockidx], th_args);
+				handle_receive_packets(xsk_sockets[sockidx]);
 			}
 		}
 	}
@@ -820,32 +673,6 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	// Initialize a count for each thread, to prevent false sharing from a global counter
-    void* rawPtr_Count;
-    if (posix_memalign(&rawPtr_Count, CACHE_LINE_SIZE, NUM_THREADS * sizeof(Counter)) != 0) {
-        perror("posix_memalign error\n");
-        exit(EXIT_FAILURE);
-    }
-    Counter* countArr = (Counter*)rawPtr_Count;
-    for (int i = 0; i < NUM_THREADS; ++i) {
-        countArr[i].count = 0;
-    }
-	
-	// Initialize a spinlock for each bucket, for minimal lock contention
-    void* rawPtr_Spinlock;
-    if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE, TABLE_SIZE * sizeof(Spinlock)) != 0) {
-        perror("posix_memalign error\n");
-        exit(EXIT_FAILURE);
-    }
-    Spinlock* locks = (Spinlock*)rawPtr_Spinlock;
-    for (int i = 0; i < TABLE_SIZE; ++i) {
-        pthread_spin_init(&locks[i].lock, PTHREAD_PROCESS_PRIVATE);
-    }
-
-    // Initialize the hashtable, which will serve as the in-memory key-value store
-    Node** hashtable = (Node**)malloc(TABLE_SIZE * sizeof(Node*));
-    initialize_hashtable(hashtable);
-    
 	/* Allocate memory for NUM_FRAMES of the default XDP frame size */
 	packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
 	if (posix_memalign(&packet_buffer,
@@ -891,13 +718,9 @@ int main(int argc, char **argv)
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
-	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
-	th_args->xskis = xsk_sockets;
-	th_args->countArr = countArr;
-	th_args->hashtable = hashtable;
-	th_args->locks = locks;
-	th_args->core_id = 0;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
+		th_args->xskis = xsk_sockets;
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
 	
@@ -911,12 +734,6 @@ int main(int argc, char **argv)
 		xsk_socket__delete(xsk_sockets[sockidx]->xsk);
 		xsk_umem__delete(umems[sockidx]->umem);
 	}
-
-	// Cleanup
-    hashtable_cleanup(hashtable);
-    for (int i = 0; i < TABLE_SIZE; ++i) {
-        pthread_spin_destroy(&locks[i].lock);
-    }
 
 	return EXIT_OK;
 }
