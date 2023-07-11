@@ -723,7 +723,6 @@ int main(int argc, char **argv)
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
 		th_args->xskis = xsk_sockets;
-		th_args->idx = th_idx;
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
 	
