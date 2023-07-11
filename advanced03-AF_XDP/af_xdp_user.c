@@ -429,7 +429,6 @@ static void rx_and_process(void* args)
 	printf("rx and process\n");
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
-	int idx = th_args->idx;
 
 	struct pollfd fds[1];
 	int ret = 1;
