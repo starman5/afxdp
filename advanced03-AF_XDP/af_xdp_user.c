@@ -377,6 +377,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
 	if (!rcvd)
+		printf("no more rcvd\n");
 		return;
 
 	printf("rcvd: %d\n", rcvd);
