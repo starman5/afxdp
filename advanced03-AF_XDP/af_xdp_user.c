@@ -376,6 +376,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	// Check if there is something to consume at all
 	
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
+	printf("rcvd: %d\n", rcvd);
 	if (!rcvd)
 		return;
 
