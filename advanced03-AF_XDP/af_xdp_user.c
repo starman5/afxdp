@@ -207,8 +207,12 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	if (ret)
 		goto error_exit;
 
+	printf("After creation of a socket\n");
+
 	if (custom_xsk) {
 		ret = xsk_socket__update_xskmap(xsk_info->xsk, xsk_map_fd);
+		printf("updating xskmap with fd: %d\n", xsk_map_fd);
+		printf("xsk_info->xsk: %d\n", xsk_socket__fd(xsk_info->xsk));
 		if (ret)
 			goto error_exit;
 	} else {
@@ -216,6 +220,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 		if (bpf_xdp_query_id(cfg->ifindex, cfg->xdp_flags, &prog_id))
 			goto error_exit;
 	}
+	printf("Before initializing umem\n");
 
 	/* Initialize umem frame allocation */
 	for (i = 0; i < NUM_FRAMES; i++)
@@ -228,15 +233,26 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 					XSK_RING_PROD__DEFAULT_NUM_DESCS,
 					&idx);
 
+	//printf("reserved: %d\n", ret);
 	if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
 		goto error_exit;
+
+	int original_idx = idx;
 
 	for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
 		*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
 			xsk_alloc_umem_frame(xsk_info);
+		
+	// Debugging
+	//printf("Addresses on fill ring:\n");
+	for (int ct = 0; ct < XSK_RING_PROD__DEFAULT_NUM_DESCS; ++ct) {
+		//printf("%d: %p\n", original_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
+	}
+	//printf("\n");
 
 	xsk_ring_prod__submit(&xsk_info->umem->fq,
 			    XSK_RING_PROD__DEFAULT_NUM_DESCS);
+	//printf("After submit\n");
 
 	return xsk_info;
 
@@ -250,6 +266,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	unsigned int completed;
 	uint32_t idx_cq;
 
+	//printf("in complete_tx\n");
 	if (!xsk->outstanding_tx)
 		return;
 
@@ -260,6 +277,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 					XSK_RING_CONS__DEFAULT_NUM_DESCS,
 					&idx_cq);
 
+	printf("completed: %d\n", completed);
 	if (completed > 0) {
 		for (int i = 0; i < completed; i++)
 			xsk_free_umem_frame(xsk,
@@ -296,13 +314,14 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
 	++num_packets;
-	printf("packet\n");
 
     /*
 	
 	Put whatever you want here, depending on use case
 
 	*/
+
+	printf("Received packet\n");
 
 	if (false) {
 		int ret;
@@ -340,6 +359,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		ret = xsk_ring_prod__reserve(&xsk->tx, 64, &tx_idx);
 		if (ret != 1) {
 			/* No more transmit slots, drop the packet */
+			printf("no more transmit slots\n");
 			return false;
 		}
 
@@ -367,15 +387,20 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
 	if (!rcvd)
 		return;
+	printf("idx_rx: %d\n", idx_rx);
+	printf("rcvd: %d\n", rcvd);
 
 	/* Stuff the ring with as much frames as possible */
+	printf("umem free frames: %d\n", xsk_umem_free_frames(xsk));
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
 					xsk_umem_free_frames(xsk));
+	printf("stock frames: %d\n", stock_frames);
 
 	if (stock_frames > 0) {
 
 		ret = xsk_ring_prod__reserve(&xsk->umem->fq, stock_frames,
 					     &idx_fq);
+		printf("ret: %d\n", ret);
 		/* This should not happen, but just in case */
 		while (ret != stock_frames)
 			ret = xsk_ring_prod__reserve(&xsk->umem->fq, rcvd,
@@ -388,9 +413,11 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 		xsk_ring_prod__submit(&xsk->umem->fq, stock_frames);
 	}
 
+	printf("Processing received packets\n");
 	/* Process received packets */
 	for (i = 0; i < rcvd; i++) {
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
+		printf("addr: %d\n", addr);
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
 		if (!process_packet(xsk, addr, len))
@@ -411,6 +438,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 
 static void rx_and_process(void* args)
 {
+	printf("rx and process\n");
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
 
@@ -525,6 +553,8 @@ static void *stats_poll(void *arg)
 static void exit_application(int signal)
 {
 	int err;
+
+	printf("exiting\n");
 	printf("num packets: %d\n", num_packets);
 
 	cfg.unload_all = true;
