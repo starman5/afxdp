@@ -196,7 +196,6 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	if (!xsk_info)
 		return NULL;
 
-	//__u32 queue_id = 0;
 	xsk_info->umem = umem;
 	xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
 	xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
@@ -235,16 +234,22 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 					XSK_RING_PROD__DEFAULT_NUM_DESCS,
 					&idx);
 
+	printf("reserved: %d\n", ret);
 	if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
 		goto error_exit;
-	
-	printf("After ring_prod__reserver\n");
+
+	int original_idx = idx;
 
 	for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
 		*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
 			xsk_alloc_umem_frame(xsk_info);
 		
-	printf("After for loop\n");
+	// Debugging
+	printf("Addresses on fill ring:\n");
+	for (int ct = 0; ct < XSK_RING_PROD__DEFAULT_NUM_DESCS; ++ct) {
+		printf("%d: %p\n", orginal_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
+	}
+	printf("\n");
 
 	xsk_ring_prod__submit(&xsk_info->umem->fq,
 			    XSK_RING_PROD__DEFAULT_NUM_DESCS);
