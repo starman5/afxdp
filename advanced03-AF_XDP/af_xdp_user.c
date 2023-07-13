@@ -318,7 +318,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	*/
 
-	printf("Received packet\n");
+	//printf("Received packet\n");
 
 	if (false) {
 		int ret;
@@ -381,7 +381,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	// Check if there is something to consume at all
 	
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
-	if (!rcvd || rcvd == 1)
+	if (rcvd <= 1)
 		return;
 
 	printf("rcvd: %d\n", rcvd);
