@@ -43,7 +43,7 @@ function accordingly
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
 
-int num_packets = 0;
+size_t num_packets = 0;
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -296,6 +296,9 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
 	++num_packets;
+	if (num_packets % 10000 == 0) {
+		printf("num_packets: %d\n", num_packets);
+	}
 
     /*
 	
@@ -524,7 +527,6 @@ static void *stats_poll(void *arg)
 static void exit_application(int signal)
 {
 	int err;
-	printf("num packets: %d\n", num_packets);
 
 	cfg.unload_all = true;
 	err = do_unload(&cfg);
