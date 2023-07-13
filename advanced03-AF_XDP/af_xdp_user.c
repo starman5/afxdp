@@ -296,6 +296,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
 	++num_packets;
+	printf("packet\n");
 
     /*
 	
