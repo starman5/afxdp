@@ -13,7 +13,7 @@ tiny_client:
 	$(CC) $(CFLAGS) -o tiny_client tiny_client.c
 
 tinier_client:
-	$(CC) $(CFLAGS) -o tinier_client tiner_client.c
+	$(CC) $(CFLAGS) -o tinier_client tinier_client.c
 
 clean:
 	rm -rf server client tiny_client tinier_client
