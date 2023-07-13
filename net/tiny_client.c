@@ -66,7 +66,7 @@ void *send_message(void* arg) {
 
     // Loop to send many NON messages and receive responses
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(NON, key, "hello", buffer);
