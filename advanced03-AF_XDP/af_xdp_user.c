@@ -247,7 +247,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	// Debugging
 	printf("Addresses on fill ring:\n");
 	for (int ct = 0; ct < XSK_RING_PROD__DEFAULT_NUM_DESCS; ++ct) {
-		printf("%d: %p\n", orginal_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
+		printf("%d: %p\n", original_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
 	}
 	printf("\n");
 
