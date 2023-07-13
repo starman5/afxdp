@@ -723,9 +723,10 @@ int main(int argc, char **argv)
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
+	// Thought: keep these definitions above for loop
+	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
+	th_args->xskis = xsk_sockets;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-		struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
-		th_args->xskis = xsk_sockets;
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
 	
@@ -733,6 +734,8 @@ int main(int argc, char **argv)
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		pthread_join(threads[th_idx], NULL);
 	}
+
+	printf("Threads finished\n");
 
 	/* Cleanup */
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
