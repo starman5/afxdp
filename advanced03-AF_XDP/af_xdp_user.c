@@ -43,6 +43,8 @@ function accordingly
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
 
+int num_packets = 0;
+
 static struct xdp_program *prog;
 int xsk_map_fd;
 bool custom_xsk = false;
@@ -231,7 +233,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 					XSK_RING_PROD__DEFAULT_NUM_DESCS,
 					&idx);
 
-	printf("reserved: %d\n", ret);
+	//printf("reserved: %d\n", ret);
 	if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
 		goto error_exit;
 
@@ -242,15 +244,15 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 			xsk_alloc_umem_frame(xsk_info);
 		
 	// Debugging
-	printf("Addresses on fill ring:\n");
+	//printf("Addresses on fill ring:\n");
 	for (int ct = 0; ct < XSK_RING_PROD__DEFAULT_NUM_DESCS; ++ct) {
-		printf("%d: %p\n", original_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
+		//printf("%d: %p\n", original_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
 	}
-	printf("\n");
+	//printf("\n");
 
 	xsk_ring_prod__submit(&xsk_info->umem->fq,
 			    XSK_RING_PROD__DEFAULT_NUM_DESCS);
-	printf("After submit\n");
+	//printf("After submit\n");
 
 	return xsk_info;
 
@@ -264,7 +266,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	unsigned int completed;
 	uint32_t idx_cq;
 
-	printf("in complete_tx\n");
+	//printf("in complete_tx\n");
 	if (!xsk->outstanding_tx)
 		return;
 
@@ -310,6 +312,8 @@ static bool process_packet(struct xsk_socket_info *xsk,
 			   uint64_t addr, uint32_t len)
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
+
+	++num_packets;
 
     /*
 	
@@ -549,6 +553,9 @@ static void *stats_poll(void *arg)
 static void exit_application(int signal)
 {
 	int err;
+
+	printf("exiting\n");
+	printf("num packets: %d\n", num_packets);
 
 	cfg.unload_all = true;
 	err = do_unload(&cfg);
