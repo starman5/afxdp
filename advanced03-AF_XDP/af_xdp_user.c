@@ -387,6 +387,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	printf("rcvd: %d\n", rcvd);
 
 	/* Stuff the ring with as much frames as possible */
+	printf("umem free frames: %d\n", xsk_umem_free_frames(xsk));
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
 					xsk_umem_free_frames(xsk));
 	printf("stock frames: %d\n", stock_frames);
