@@ -45,6 +45,7 @@ function accordingly
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
+#define C				   64
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -231,28 +232,29 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 
 	/* Stuff the receive path with buffers, we assume we have enough */
 	ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
-					XSK_RING_PROD__DEFAULT_NUM_DESCS,
+					C,
+					64,
 					&idx);
 
 	printf("reserved: %d\n", ret);
-	if (ret != XSK_RING_PROD__DEFAULT_NUM_DESCS)
+	if (ret != C)
 		goto error_exit;
 
 	int original_idx = idx;
 
-	for (i = 0; i < XSK_RING_PROD__DEFAULT_NUM_DESCS; i ++)
+	for (i = 0; i < C; i ++)
 		*xsk_ring_prod__fill_addr(&xsk_info->umem->fq, idx++) =
 			xsk_alloc_umem_frame(xsk_info);
 		
 	// Debugging
 	printf("Addresses on fill ring:\n");
-	for (int ct = 0; ct < XSK_RING_PROD__DEFAULT_NUM_DESCS; ++ct) {
+	for (int ct = 0; ct < C ++ct) {
 		printf("%d: %p\n", original_idx, *xsk_ring_prod__fill_addr(&xsk_info->umem->fq, original_idx++));
 	}
 	printf("\n");
 
 	xsk_ring_prod__submit(&xsk_info->umem->fq,
-			    XSK_RING_PROD__DEFAULT_NUM_DESCS);
+			    C);
 	printf("After submit\n");
 
 	return xsk_info;
@@ -275,7 +277,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 
 	/* Collect/free completed TX buffers */
 	completed = xsk_ring_cons__peek(&xsk->umem->cq,
-					XSK_RING_CONS__DEFAULT_NUM_DESCS,
+					C,
 					&idx_cq);
 
 	printf("completed: %d\n", completed);
