@@ -72,7 +72,7 @@ int main() {
             perror("Sendto failed");
             exit(EXIT_FAILURE);
         }
-        usleep(50000);
+        usleep(5000);
     }
 
     close(sockfd);
