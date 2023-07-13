@@ -381,7 +381,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	// Check if there is something to consume at all
 	
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
-	if (rcvd <= 1)
+	if (!rcvd)
 		return;
 
 	printf("rcvd: %d\n", rcvd);
@@ -447,54 +447,14 @@ static void rx_and_process(void* args)
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, nfds, -1);
-			//if (ret <= 0 || ret > 1)
-			//	continue;
-			// Handle packets on the ready sockets
-			//for (int socki = 0; socki < nfds; ++socki) {
-			//	if (fds[socki].revents & POLLIN) {
-					handle_receive_packets(xsk_sockets[0]);
-			//	}
-			//}
+			handle_receive_packets(xsk_sockets[0]);
 		}
 		else {
 			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 				handle_receive_packets(xsk_sockets[sockidx]);
 			}
 		}
-	}
-
-	/*struct pollfd fds[NUM_SOCKETS];
-	int ret = 1;
-
-	// Initialize file descriptors to be waited on
-	memset(fds, 0, sizeof(fds));
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		fds[sockidx].fd = xsk_socket__fd(xsk_sockets[sockidx]->xsk);
-		fds[sockidx].events = POLLIN;
-	}
-
-	while(!global_exit) {
-		//if (cfg->xsk_poll_mode) {
-		if (cfg.xsk_poll_mode) {
-			printf("begin polling\n");
-			ret = poll(fds, NUM_SOCKETS, -1);
-			printf("done polling\n");
-			if (ret <= 0)
-				continue;
-		}
-
-		printf("checking for events\n");
-		// Check for events on each socket
-		for (int socki = 0; socki < NUM_SOCKETS; ++socki) {
-			if (fds[socki].revents != 0) {
-				printf("There is something\n");
-				if (fds[socki].revents & POLLIN) {
-					printf("found event\n");
-					handle_receive_packets(xsk_sockets[socki]);
-				}
-			}
-		}
-	}*/
+	}	
 }
 
 #define NANOSEC_PER_SEC 1000000000 /* 10^9 */
