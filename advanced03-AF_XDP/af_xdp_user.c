@@ -196,7 +196,6 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	if (!xsk_info)
 		return NULL;
 
-	__u32 queue_id = 0;
 	xsk_info->umem = umem;
 	xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
 	xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
@@ -204,7 +203,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_cfg.bind_flags = cfg->xsk_bind_flags;
 	xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
 	ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname,
-				 queue_id, umem->umem, &xsk_info->rx,
+				 queue, umem->umem, &xsk_info->rx,
 				 &xsk_info->tx, &umem->fq, &umem->cq, &xsk_cfg);
 	if (ret)
 		goto error_exit;
@@ -384,18 +383,19 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
 	if (!rcvd)
 		return;
-
+	printf("idx_rx: %d\n", idx_rx);
 	printf("rcvd: %d\n", rcvd);
 
 	/* Stuff the ring with as much frames as possible */
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
 					xsk_umem_free_frames(xsk));
+	printf("stock frames: %d\n", stock_frames);
 
 	if (stock_frames > 0) {
 
 		ret = xsk_ring_prod__reserve(&xsk->umem->fq, stock_frames,
 					     &idx_fq);
-
+		printf("ret: %d\n", ret);
 		/* This should not happen, but just in case */
 		while (ret != stock_frames)
 			ret = xsk_ring_prod__reserve(&xsk->umem->fq, rcvd,
@@ -408,9 +408,11 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 		xsk_ring_prod__submit(&xsk->umem->fq, stock_frames);
 	}
 
+	printf("Processing received packets\n");
 	/* Process received packets */
 	for (i = 0; i < rcvd; i++) {
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
+		printf("addr: %d\n", addr);
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
 		if (!process_packet(xsk, addr, len))
@@ -450,10 +452,9 @@ static void rx_and_process(void* args)
 			ret = poll(fds, nfds, -1);
 			handle_receive_packets(xsk_sockets[0]);
 		}
-		else {
-			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-				handle_receive_packets(xsk_sockets[sockidx]);
-			}
+
+		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+			handle_receive_packets(xsk_sockets[sockidx]);
 		}
 	}	
 }
@@ -668,23 +669,10 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
-
-	/* Start thread to do statistics display */
-	/*
-	if (verbose) {
-		ret = pthread_create(&stats_poll_thread, NULL, stats_poll,
-				     xsk_sockets[0]);
-		if (ret) {
-			fprintf(stderr, "ERROR: Failed creating statistics thread "
-				"\"%s\"\n", strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-	}
-	*/
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
-	// Thought: keep these definitions above for loop
+
 	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
 	th_args->xskis = xsk_sockets;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
