@@ -322,7 +322,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	printf("Received packet\n");
 
-	//if (false) {
+	if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
 		uint8_t tmp_mac[ETH_ALEN];
@@ -370,9 +370,9 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		xsk->stats.tx_bytes += len;
 		xsk->stats.tx_packets++;
 		return true;
-	//}
+	}
 
-	//return false;
+	return false;
 }
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
@@ -456,9 +456,10 @@ static void rx_and_process(void* args)
 			ret = poll(fds, nfds, -1);
 			handle_receive_packets(xsk_sockets[0]);
 		}
-
-		for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-			handle_receive_packets(xsk_sockets[sockidx]);
+		else {
+			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+				handle_receive_packets(xsk_sockets[sockidx]);
+			}
 		}
 	}	
 }
