@@ -65,14 +65,14 @@ void *send_message(void* arg) {
         exit(EXIT_FAILURE);
     }
 
-    // Loop to send many SET messages and receive responses
+    // Loop to send many SET messages
     char buffer[BUFFER_SZ];
     for (int i = 0; i < 100000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(SET, key, "hello", buffer);
         ssize_t bytes_sent; 
-        bytes_sent = sendto(sockfd, buffer, strlen(buffer), MSG_WAITALL, (struct sockaddr*)&server_addr, (socklen_t)sizeof(server_addr));
+        bytes_sent = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, (socklen_t)sizeof(server_addr));
         if (bytes_sent < 0) {
             perror("Sendto failed");
             exit(EXIT_FAILURE);
