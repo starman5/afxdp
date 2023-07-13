@@ -271,7 +271,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	if (!xsk->outstanding_tx)
 		return;
 
-	//sendto(xsk_socket__fd(xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
+	sendto(xsk_socket__fd(xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
 
 	/* Collect/free completed TX buffers */
 	completed = xsk_ring_cons__peek(&xsk->umem->cq,
@@ -322,7 +322,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	printf("Received packet\n");
 
-	if (false) {
+	//if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
 		uint8_t tmp_mac[ETH_ALEN];
@@ -370,9 +370,9 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		xsk->stats.tx_bytes += len;
 		xsk->stats.tx_packets++;
 		return true;
-	}
+	//}
 
-	return false;
+	//return false;
 }
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
