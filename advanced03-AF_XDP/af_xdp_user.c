@@ -267,6 +267,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	unsigned int completed;
 	uint32_t idx_cq;
 
+	printf("in complete_tx\n");
 	if (!xsk->outstanding_tx)
 		return;
 
