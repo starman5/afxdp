@@ -320,7 +320,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	//printf("Received packet\n");
 
-	if (false) {
+	/*if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
 		uint8_t tmp_mac[ETH_ALEN];
@@ -347,16 +347,16 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 		csum_replace2(&icmp->icmp6_cksum,
 			      htons(ICMPV6_ECHO_REQUEST << 8),
-			      htons(ICMPV6_ECHO_REPLY << 8));
+			      htons(ICMPV6_ECHO_REPLY << 8));*/
 
 		/* Here we sent the packet out of the receive port. Note that
 		 * we allocate one entry and schedule it. Your design would be
 		 * faster if you do batch processing/transmission */
 
-		ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
-		if (ret != 1) {
+		/*ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
+		if (ret != 1) {*/
 			/* No more transmit slots, drop the packet */
-			return false;
+			/*return false;
 		}
 
 		xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
@@ -369,7 +369,8 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		return true;
 	}
 
-	return false;
+	return false;*/
+	return true;
 }
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
@@ -426,7 +427,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	xsk->stats.rx_packets += rcvd;
 
 	/* Do we need to wake up the kernel for transmission */
-	complete_tx(xsk);
+	//complete_tx(xsk);
   }
 
 //static void rx_and_process(struct config* cfg,
