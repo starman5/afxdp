@@ -301,7 +301,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	// Send back out a generic UDP packet
 
-	if (false) {
+	//if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
 		uint8_t tmp_mac[ETH_ALEN];
@@ -344,7 +344,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		xsk->stats.tx_bytes += len;
 		xsk->stats.tx_packets++;
 		return true;
-	}
+	//}
 
 	return false;
 }
