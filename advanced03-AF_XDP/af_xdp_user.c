@@ -298,40 +298,32 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	++num_packets;
 
-    /*
-	
-	Put whatever you want here, depending on use case
+	// Send back out a generic UDP packet
 
-	*/
-
-	if (false) {
+	//if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
 		uint8_t tmp_mac[ETH_ALEN];
-		struct in6_addr tmp_ip;
+		struct in_addr tmp_ip;
 		struct ethhdr *eth = (struct ethhdr *) pkt;
-		struct ipv6hdr *ipv6 = (struct ipv6hdr *) (eth + 1);
-		struct icmp6hdr *icmp = (struct icmp6hdr *) (ipv6 + 1);
+		struct iphdr *iph = (struct iphdr *) (eth + 1);
+		// If I keep the source and dest port the same, don't need to worry about UDP
 
-		if (ntohs(eth->h_proto) != ETH_P_IPV6 ||
-		    len < (sizeof(*eth) + sizeof(*ipv6) + sizeof(*icmp)) ||
-		    ipv6->nexthdr != IPPROTO_ICMPV6 ||
-		    icmp->icmp6_type != ICMPV6_ECHO_REQUEST)
+		if (ntohs(eth->h_proto) != ETH_P_IP )//||
+		    //len < (sizeof(*eth) + sizeof(*ipv6) + sizeof(*icmp)) ||
+		    //ipv6->nexthdr != IPPROTO_ICMPV6 ||
+		    //icmp->icmp6_type != ICMPV6_ECHO_REQUEST)
 			return false;
 
+		// Swap source and destination MAC
 		memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
 		memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
 		memcpy(eth->h_source, tmp_mac, ETH_ALEN);
 
-		memcpy(&tmp_ip, &ipv6->saddr, sizeof(tmp_ip));
-		memcpy(&ipv6->saddr, &ipv6->daddr, sizeof(tmp_ip));
-		memcpy(&ipv6->daddr, &tmp_ip, sizeof(tmp_ip));
-
-		icmp->icmp6_type = ICMPV6_ECHO_REPLY;
-
-		csum_replace2(&icmp->icmp6_cksum,
-			      htons(ICMPV6_ECHO_REQUEST << 8),
-			      htons(ICMPV6_ECHO_REPLY << 8));
+		// Swap source and destination IP
+		memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
+		memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
+		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
 
 		/* Here we sent the packet out of the receive port. Note that
 		 * we allocate one entry and schedule it. Your design would be
@@ -351,7 +343,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		xsk->stats.tx_bytes += len;
 		xsk->stats.tx_packets++;
 		return true;
-	}
+	//}
 
 	return false;
 }

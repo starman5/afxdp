@@ -71,11 +71,15 @@ int main() {
         memset(buffer, '\0', BUFFER_SZ);
         serialize(NON, key, "hello", buffer);
         ssize_t bytes_sent; 
+        // Send message
         bytes_sent = sendto(sockfd, buffer, strlen(buffer), MSG_WAITALL, (struct sockaddr*)&server_addr, (socklen_t)sizeof(server_addr));
         if (bytes_sent < 0) {
             perror("Sendto failed");
             exit(EXIT_FAILURE);
         }
+        // Wait for response back
+        memset(buffer, '\0', BUFFER_SZ);
+        int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
     }
 
     close(sockfd);
