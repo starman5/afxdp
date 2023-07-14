@@ -44,6 +44,7 @@ function accordingly
 #define NUM_THREADS		   1
 
 size_t num_packets = 0;
+size_t num_ready = 0;
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -296,9 +297,6 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
 	++num_packets;
-	if (num_packets % 10000 == 0) {
-		printf("num_packets: %d\n", num_packets);
-	}
 
     /*
 	
@@ -370,6 +368,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	if (!rcvd)
 		return;
 
+	++num_ready;
 	/* Stuff the ring with as much frames as possible */
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
 					xsk_umem_free_frames(xsk));
@@ -526,6 +525,8 @@ static void *stats_poll(void *arg)
 
 static void exit_application(int signal)
 {
+	printf("received %d packets\n", num_packets);
+	printf("socket ready %d times\n", num_ready);
 	int err;
 
 	cfg.unload_all = true;
