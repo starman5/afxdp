@@ -29,8 +29,9 @@ function accordingly
 #include <net/if.h>
 #include <linux/if_link.h>
 #include <linux/if_ether.h>
-#include <linux/ipv6.h>
+#include <linux/ip.h>
 #include <linux/icmpv6.h>
+#include <linux/udp.h>
 
 #include "../common/common_params.h"
 #include "../common/common_user_bpf_xdp.h"
