@@ -371,6 +371,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
 		memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
 		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
+		printf("here\n");
 
 		printf("src_ip: %s\n", iph->saddr);
 		printf("dst_ip: %s\n", iph->daddr);
