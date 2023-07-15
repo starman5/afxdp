@@ -380,7 +380,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		printf("src_ip: %s\n", sa);
 
 		struct in_addr dstIP;
-		dstIP.saddr = iph->daddr;
+		dstIP.s_addr = iph->daddr;
 		char da[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &(dstIP.s_addr), da, INET_ADDRSTRLEN);
 		printf("dst_ip: %s\n", iph->daddr);
