@@ -346,7 +346,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
 	xsk_ring_prod__submit(&xsk->tx, 1);
-	xsk->outstanding_tx += 1
+	xsk->outstanding_tx += 1;
 
 	xsk->stats.tx_bytes += len;
 	xsk->stats.tx_packets++;
