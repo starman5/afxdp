@@ -393,7 +393,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		 * we allocate one entry and schedule it. Your design would be
 		 * faster if you do batch processing/transmission */
 
-		ret = xsk_ring_prod__reserve(&xsk->tx, 64, &tx_idx);
+		ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
 		if (ret != 1) {
 			printf("no more transmit slots\n");
 			/* No more transmit slots, drop the packet */
