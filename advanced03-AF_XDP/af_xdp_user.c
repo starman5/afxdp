@@ -308,7 +308,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	++num_packets;
 
 	// Data structures for a generic IP/UDP packet
-	char buffer[FRAME_SIZE];
+	/*char buffer[FRAME_SIZE];
 	memset(buffer, 0, FRAME_SIZE);
 	struct ethhdr *eth = (struct ethhdr *)(buffer);
 	struct iphdr *iph = (struct iphdr *)(buffer + sizeof(struct ethhdr));
@@ -345,18 +345,18 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	udph->len = htons(sizeof(udph));	// We have no payload
 	udph->check = 0;
 
-	memcpy(pkt, buffer, FRAME_SIZE);
+	memcpy(pkt, buffer, FRAME_SIZE);*/
 
 	//if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
-		/*uint8_t tmp_mac[ETH_ALEN];
+		uint8_t tmp_mac[ETH_ALEN];
 		struct in_addr tmp_ip;
 		struct ethhdr *eth = (struct ethhdr *) pkt;
 		struct iphdr *iph = (struct iphdr *) (eth + 1);
 		// If I keep the source and dest port the same, don't need to worry about UDP
 		printf("Creating new packet\n");
-		if (ntohs(eth->h_proto) != ETH_P_IP )//||
+		if (ntohs(eth->h_proto) != ETH_P_IP) //||
 		    //len < (sizeof(*eth) + sizeof(*ipv6) + sizeof(*icmp)) ||
 		    //ipv6->nexthdr != IPPROTO_ICMPV6 ||
 		    //icmp->icmp6_type != ICMPV6_ECHO_REQUEST)
@@ -371,7 +371,12 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
 		memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
 		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
-		*/
+
+		printf("src_ip: %s\n", iph->saddr);
+		printf("dst_ip: %s\n", iph->daddr);
+		printf("src_mac: %s\n", eth->h_source);
+		printf("dst_mac: %s\n", eth->h_dest);
+		
 
 		/* Here we sent the packet out of the receive port. Note that
 		 * we allocate one entry and schedule it. Your design would be
@@ -393,7 +398,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		return true;
 	//}
 
-	return false;
+	//return false;
 }
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
@@ -434,9 +439,10 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
-		if (!process_packet(xsk, addr, len))
+		if (!process_packet(xsk, addr, len)) {
+			printf("Couldn't send!\n");
 			xsk_free_umem_frame(xsk, addr);
-
+		}
 		xsk->stats.rx_bytes += len;
 	}
 
