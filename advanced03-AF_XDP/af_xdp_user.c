@@ -378,9 +378,15 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		char sa[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &(srcIP.s_addr), sa, INET_ADDRSTRLEN);
 		printf("src_ip: %s\n", sa);
+
+		struct in_addr dstIP;
+		dstIP.saddr = iph->daddr;
+		char da[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &(dstIP.s_addr), da, INET_ADDRSTRLEN);
 		printf("dst_ip: %s\n", iph->daddr);
-		printf("src_mac: %s\n", eth->h_source);
-		printf("dst_mac: %s\n", eth->h_dest);
+
+		printf("src_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
+		printf("dst_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
 		
 
 		/* Here we sent the packet out of the receive port. Note that
