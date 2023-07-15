@@ -341,7 +341,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	// Fill out UDP header fields
 	udph = (struct udphdr *)(buffer + sizeof(struct ethhdr) + (iph->ihl * 4));
 	udph->source = htons(SRC_PORT);
-	udph->dest = htons(DEST_PORT);
+	udph->dest = htons(DST_PORT);
 	udph->len = htons(sizeof(udph));	// We have no payload
 	udph->check = 0;
 
