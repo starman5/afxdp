@@ -371,6 +371,8 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
 		memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
 		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
+		
+		/*
 		printf("here\n");
 
 		struct in_addr srcIP;
@@ -387,6 +389,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 		printf("src_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
 		printf("dst_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
+		*/
 		
 
 		/* Here we sent the packet out of the receive port. Note that
