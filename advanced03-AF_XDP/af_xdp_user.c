@@ -373,7 +373,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
 		printf("here\n");
 
-		printf("src_ip: %s\n", iph->saddr);
+		printf("src_ip: %s\n", inet_ntoa(iph->saddr));
 		printf("dst_ip: %s\n", iph->daddr);
 		printf("src_mac: %s\n", eth->h_source);
 		printf("dst_mac: %s\n", eth->h_dest);
