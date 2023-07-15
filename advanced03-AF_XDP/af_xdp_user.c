@@ -40,6 +40,7 @@ function accordingly
 #define NUM_FRAMES         4096
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
+#define TX_BATCH_SIZE	   64
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
@@ -54,6 +55,7 @@ function accordingly
 
 size_t num_packets = 0;
 size_t num_ready = 0;
+size_t num_tx_packets = 0;
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -307,113 +309,52 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	++num_packets;
 
-	// Data structures for a generic IP/UDP packet
-	/*char buffer[FRAME_SIZE];
-	memset(buffer, 0, FRAME_SIZE);
-	struct ethhdr *eth = (struct ethhdr *)(buffer);
-	struct iphdr *iph = (struct iphdr *)(buffer + sizeof(struct ethhdr));
-	struct udphdr *udph = NULL;
-
-	// Format MAC addresses
-	char src_mac[ETH_ALEN];
-	char dst_mac[ETH_ALEN];
-	sscanf(SRC_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &src_mac[0], &src_mac[1], &src_mac[2], &src_mac[3], &src_mac[4], &src_mac[5]);
-	sscanf(DST_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &dst_mac[0], &dst_mac[1], &dst_mac[2], &dst_mac[3], &dst_mac[4], &dst_mac[5]);
-
-	// Fill out Ethernet header
-	eth->h_proto = htons(ETH_P_IP);
-	memcpy(eth->h_source, src_mac, ETH_ALEN);
-	memcpy(eth->h_dest, dst_mac, ETH_ALEN);
-
-	// Fill out IP header fields
-	iph->ihl = 5;
-	iph->version = 4;
-	iph->protocol = IPPROTO_UDP;
-	// Set source IP
-	struct in_addr saddr;
-	inet_pton(AF_INET, "", &(saddr.s_addr));
-	iph->saddr = saddr.s_addr;
-	// Set dest IP
-	struct in_addr daddr;
-	inet_pton(AF_INET, "", &(daddr.s_addr));
-	iph->daddr = daddr.s_addr;
-
-	// Fill out UDP header fields
-	udph = (struct udphdr *)(buffer + sizeof(struct ethhdr) + (iph->ihl * 4));
-	udph->source = htons(SRC_PORT);
-	udph->dest = htons(DST_PORT);
-	udph->len = htons(sizeof(udph));	// We have no payload
-	udph->check = 0;
-
-	memcpy(pkt, buffer, FRAME_SIZE);*/
-
-	//if (false) {
-		int ret;
-		uint32_t tx_idx = 0;
-		uint8_t tmp_mac[ETH_ALEN];
-		struct in_addr tmp_ip;
-		struct ethhdr *eth = (struct ethhdr *) pkt;
-		struct iphdr *iph = (struct iphdr *) (eth + 1);
-		// If I keep the source and dest port the same, don't need to worry about UDP
-		//printf("Creating new packet\n");
-		if (ntohs(eth->h_proto) != ETH_P_IP) //||
-		    //len < (sizeof(*eth) + sizeof(*ipv6) + sizeof(*icmp)) ||
-		    //ipv6->nexthdr != IPPROTO_ICMPV6 ||
-		    //icmp->icmp6_type != ICMPV6_ECHO_REQUEST)
+	
+	int ret;
+	uint32_t tx_idx = 0;
+	uint8_t tmp_mac[ETH_ALEN];
+	struct in_addr tmp_ip;
+	struct ethhdr *eth = (struct ethhdr *) pkt;
+	struct iphdr *iph = (struct iphdr *) (eth + 1);
+		
+	if (ntohs(eth->h_proto) != ETH_P_IP)
 			return false;
 
-		// Swap source and destination MAC
-		memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
-		memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
-		memcpy(eth->h_source, tmp_mac, ETH_ALEN);
+	// Swap source and destination MAC
+	memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
+	memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
+	memcpy(eth->h_source, tmp_mac, ETH_ALEN);
 
-		// Swap source and destination IP
-		memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
-		memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
-		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
-		
-		/*
-		printf("here\n");
-
-		struct in_addr srcIP;
-		srcIP.s_addr = iph->saddr;
-		char sa[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &(srcIP.s_addr), sa, INET_ADDRSTRLEN);
-		printf("src_ip: %s\n", sa);
-
-		struct in_addr dstIP;
-		dstIP.s_addr = iph->daddr;
-		char da[INET_ADDRSTRLEN];
-		inet_ntop(AF_INET, &(dstIP.s_addr), da, INET_ADDRSTRLEN);
-		printf("dst_ip: %s\n", da);
-
-		printf("src_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
-		printf("dst_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
-		*/
+	// Swap source and destination IP
+	memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
+	memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
+	memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
 		
 
-		/* Here we sent the packet out of the receive port. Note that
-		 * we allocate one entry and schedule it. Your design would be
-		 * faster if you do batch processing/transmission */
+	/* Here we sent the packet out of the receive port. Note that
+	 * we allocate one entry and schedule it. Your design would be
+	 * faster if you do batch processing/transmission */
 
-		ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
-		if (ret != 1) {
-			printf("no more transmit slots\n");
-			/* No more transmit slots, drop the packet */
-			return false;
-		}
+	ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
+	if (ret != 1) {
+		printf("no more transmit slots\n");
+		/* No more transmit slots, drop the packet */
+		return false;
+	}
 
-		xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
-		xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
-		xsk_ring_prod__submit(&xsk->tx, 1);
-		xsk->outstanding_tx++;
+	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
+	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-		xsk->stats.tx_bytes += len;
-		xsk->stats.tx_packets++;
-		return true;
-	//}
+	// Batch the sends
+	if (num_tx_packets >= TX_BATCH_SIZE) {
+		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+		xsk->outstanding_tx += num_tx_packets;
+		num_tx_packets = 0;
+	}
 
-	//return false;
+	xsk->stats.tx_bytes += len;
+	xsk->stats.tx_packets++;
+	return true;
 }
 
 static void handle_receive_packets(struct xsk_socket_info *xsk)
