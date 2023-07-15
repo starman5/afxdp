@@ -383,7 +383,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		dstIP.s_addr = iph->daddr;
 		char da[INET_ADDRSTRLEN];
 		inet_ntop(AF_INET, &(dstIP.s_addr), da, INET_ADDRSTRLEN);
-		printf("dst_ip: %s\n", iph->daddr);
+		printf("dst_ip: %s\n", da);
 
 		printf("src_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_source[0], eth->h_source[1], eth->h_source[2], eth->h_source[3], eth->h_source[4], eth->h_source[5]);
 		printf("dst_mac: %02X:%02X:%02X:%02X:%02X:%02X\n", eth->h_dest[0], eth->h_dest[1], eth->h_dest[2], eth->h_dest[3], eth->h_dest[4], eth->h_dest[5]);
