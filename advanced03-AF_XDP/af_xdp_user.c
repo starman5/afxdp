@@ -44,6 +44,12 @@ function accordingly
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
 
+#define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
+#define SRC_MAC	"9c:dc:71:5d:41:f1"
+#define DST_MAC	"9c:dc:71:5d:01:81"
+#define SRC_IP	"192.168.6.1"
+#define DST_IP	"192.168.6.2"
+
 size_t num_packets = 0;
 size_t num_ready = 0;
 
@@ -299,12 +305,50 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	++num_packets;
 
-	// Send back out a generic UDP packet
+	// Data structures for a generic IP/UDP packet
+	char buffer[FRAME_SIZE];
+	memset(buffer, 0, FRAME_SIZE);
+	struct ethhdr *eth = (struct ethhdr *)(buffer);
+	struct iphdr *iph = (struct iphdr *)(buffer + sizeof(struct ethhdr));
+	struct udphdr *udph = NULL;
+
+	// Format MAC addresses
+	char src_mac[ETH_ALEN];
+	char dst_mac[ETH_ALEN];
+	sscanf(SRC_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &src_mac[0], &src_mac[1], &src_mac[2], &src_mac[3], &src_mac[4], &src_mac[5]);
+	sscanf(DST_MAC, "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &dst_mac[0], &dst_mac[1], &dst_mac[2], &dst_mac[3], &dst_mac[4], &dst_mac[5]);
+
+	// Fill out Ethernet header
+	eth->h_proto = htons(ETH_P_IP);
+	memcpy(eth->h_source, src_mac, ETH_ALEN);
+	memcpy(eth->h_dest, dst_mac, ETH_ALEN);
+
+	// Fill out IP header fields
+	iph->ihl = 5;
+	iph->version = 4;
+	iph->protocol = IPPROTO_UDP;
+	// Set source IP
+	struct in_addr saddr;
+	inet_pton(AF_INET, "", &(saddr.s_addr));
+	iph->saddr = saddr.s_addr;
+	// Set dest IP
+	struct in_addr daddr;
+	inet_pton(AF_INET, "", &(daddr.s_addr));
+	iph->daddr = daddr.s_addr;
+
+	// Fill out UDP header fields
+	udph = (struct udphdr *)(buffer + sizeof(struct ethhdr) + (iph->ihl * 4));
+	udph->source = htons(SRC_PORT);
+	udhp->dest = htons(DEST_PORT);
+	udph->len = htons(sizeof(udphdr));	// We have no payload
+	udph->check = 0;
+
+	memcpy(pkt, buffer, FRAME_SIZE);
 
 	//if (false) {
 		int ret;
 		uint32_t tx_idx = 0;
-		uint8_t tmp_mac[ETH_ALEN];
+		/*uint8_t tmp_mac[ETH_ALEN];
 		struct in_addr tmp_ip;
 		struct ethhdr *eth = (struct ethhdr *) pkt;
 		struct iphdr *iph = (struct iphdr *) (eth + 1);
@@ -325,6 +369,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
 		memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
 		memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
+		*/
 
 		/* Here we sent the packet out of the receive port. Note that
 		 * we allocate one entry and schedule it. Your design would be
