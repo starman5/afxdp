@@ -355,7 +355,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 		struct ethhdr *eth = (struct ethhdr *) pkt;
 		struct iphdr *iph = (struct iphdr *) (eth + 1);
 		// If I keep the source and dest port the same, don't need to worry about UDP
-		printf("Creating new packet\n");
+		//printf("Creating new packet\n");
 		if (ntohs(eth->h_proto) != ETH_P_IP) //||
 		    //len < (sizeof(*eth) + sizeof(*ipv6) + sizeof(*icmp)) ||
 		    //ipv6->nexthdr != IPPROTO_ICMPV6 ||
