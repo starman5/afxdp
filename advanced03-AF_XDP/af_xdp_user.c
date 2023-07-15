@@ -395,6 +395,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 		ret = xsk_ring_prod__reserve(&xsk->tx, 64, &tx_idx);
 		if (ret != 1) {
+			printf("no more transmit slots\n");
 			/* No more transmit slots, drop the packet */
 			return false;
 		}
