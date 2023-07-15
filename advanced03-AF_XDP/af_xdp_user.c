@@ -49,6 +49,8 @@ function accordingly
 #define DST_MAC	"9c:dc:71:5d:01:81"
 #define SRC_IP	"192.168.6.1"
 #define DST_IP	"192.168.6.2"
+#define SRC_PORT	8889
+#define DST_PORT	8889
 
 size_t num_packets = 0;
 size_t num_ready = 0;
@@ -339,8 +341,8 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	// Fill out UDP header fields
 	udph = (struct udphdr *)(buffer + sizeof(struct ethhdr) + (iph->ihl * 4));
 	udph->source = htons(SRC_PORT);
-	udhp->dest = htons(DEST_PORT);
-	udph->len = htons(sizeof(udphdr));	// We have no payload
+	udph->dest = htons(DEST_PORT);
+	udph->len = htons(sizeof(udph));	// We have no payload
 	udph->check = 0;
 
 	memcpy(pkt, buffer, FRAME_SIZE);
