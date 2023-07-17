@@ -40,11 +40,11 @@ function accordingly
 #define NUM_FRAMES         4096
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
-#define TX_BATCH_SIZE	   50
+#define TX_BATCH_SIZE	   20
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
-#define TIMEOUT_NSEC	   500000000
+#define TIMEOUT_NSEC	   100000000
 #define TIMEOUT_SEC		   1
 
 #define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
@@ -482,7 +482,7 @@ static void rx_and_process(void* args)
 				timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
 			}
 
-			if (timeout_elapsed.tv_sec >= TIMEOUT_SEC) {
+			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
 				printf("timeout: %d\n", num_packets);
 
 				for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
