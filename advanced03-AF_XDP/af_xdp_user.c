@@ -455,7 +455,7 @@ static void rx_and_process(void* args)
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, nfds, -1);
-			handle_receive_packets(xsk_sockets[0]);
+			handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
 		}
 		else {
 			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
@@ -487,7 +487,7 @@ static void rx_and_process(void* args)
 				for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
 					int num_batched = batch_ar[idx];
 					if (num_batched > 0) {
-						struct xsk_socket* xsk = xsk_sockets[idx]->xsk;
+						struct xsk_socket_info* xsk = xsk_sockets[idx];
 						xsk_ring_prod__submit(&xsk->tx, num_batched);
 						xsk->outstanding_tx += num_batched;
 						batch_ar[idx] = 0;
