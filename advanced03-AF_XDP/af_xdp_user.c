@@ -467,11 +467,11 @@ static void rx_and_process(void* args)
 			}
 			else {
 				ret = poll(fds, nfds, 10);
-			}
-
-			if (ret == 0) {
-				printf("timeout: %d\n", num_packets);
-				batch_mode = false;
+				if (ret == 0) {
+					printf("timeout: %d\n", num_packets);
+					batch_mode = false;
+				}
+				handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
 			}
 		}
 		else {
