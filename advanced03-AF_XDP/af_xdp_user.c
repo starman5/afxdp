@@ -263,6 +263,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	uint32_t idx_cq;
 
 	if (!xsk->outstanding_tx)
+		printf("No outstanding\n");
 		return;
 
 	sendto(xsk_socket__fd(xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
@@ -281,6 +282,9 @@ static void complete_tx(struct xsk_socket_info *xsk)
 		xsk_ring_cons__release(&xsk->umem->cq, completed);
 		xsk->outstanding_tx -= completed < xsk->outstanding_tx ?
 			completed : xsk->outstanding_tx;
+	}
+	else {
+		printf("No completed\n");
 	}
 }
 
