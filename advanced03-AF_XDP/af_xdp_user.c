@@ -339,7 +339,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
 
 	// Swap source and destination port
-	udph = (struct udphdr*) ((char*)(iph + (iph->ihl * 4)));
+	udph = (struct udphdr*) (iph + 1);
 	printf("src: %d\n", udph->source);
 	printf("dst: %d\n", udph->dest);
 	uint16_t tmp = udph->source;
