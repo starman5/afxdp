@@ -352,11 +352,11 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	++num_tx_packets;
+	//++num_tx_packets;
 	//if (num_tx_packets >= TX_BATCH_SIZE) {
-		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-		xsk->outstanding_tx += num_tx_packets;
-		num_tx_packets = 0;
+		xsk_ring_prod__submit(&xsk->tx, 1);
+		xsk->outstanding_tx += 1;
+		//num_tx_packets = 0;
 	//}
 
 	xsk->stats.tx_bytes += len;
