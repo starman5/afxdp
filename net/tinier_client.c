@@ -68,7 +68,6 @@ int main() {
     // Configure source address and port
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    source_addr.sin_port = htons(CLIENT_PORT);
     if (inet_pton(AF_INET, CLIENT_IP, &(source_addr.sin_addr)) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
