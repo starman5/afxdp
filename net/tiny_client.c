@@ -46,7 +46,7 @@ void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
 
 void *send_message(void* arg) {
     int sockfd;
-    struct sockaddr_in server_addr;
+    struct sockaddr_in server_addr, source_addr;
     socklen_t addr_len = sizeof(server_addr);
 
     // Create socket
