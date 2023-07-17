@@ -465,14 +465,14 @@ static void rx_and_process(void* args)
 		}
 		
 		// Check timeout
-		bool timeout_valid = false;
+		/*bool timeout_valid = false;
 		for (int i = 0; i < NUM_SOCKETS; ++i) {
 			if (batch_ar[i] > 0)  {
 				timeout_valid = true;
 				break;
 			}
-		}
-		if (timeout_valid) {
+		}*/
+		/*if (timeout_valid) {
 			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
 			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
 			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
@@ -496,7 +496,7 @@ static void rx_and_process(void* args)
 					}
 				}
 			}
-		}
+		}*/
 	}	
 }
 
