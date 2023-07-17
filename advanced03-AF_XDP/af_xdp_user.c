@@ -68,6 +68,7 @@ struct config cfg = {
 
 struct threadArgs {
 	struct xsk_socket_info** xskis;
+	int* batch_ar;
 };
 
 struct xsk_umem_info {
@@ -310,7 +311,7 @@ static inline void csum_replace2(__sum16 *sum, __be16 old, __be16 new)
 }
 
 static bool process_packet(struct xsk_socket_info *xsk,
-			   uint64_t addr, uint32_t len)
+			   uint64_t addr, uint32_t len, int* nbatched)
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
@@ -361,11 +362,11 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	++num_tx_packets;
-	if (num_tx_packets >= TX_BATCH_SIZE) {
-		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-		xsk->outstanding_tx += num_tx_packets;
-		num_tx_packets = 0;
+	(*nbatched) += 1;
+	if (*nbatched >= TX_BATCH_SIZE) {
+		xsk_ring_prod__submit(&xsk->tx, (*nbatched));
+		xsk->outstanding_tx += (*nbatched);
+		(*nbatched) = 0;
 	}
 
 	xsk->stats.tx_bytes += len;
@@ -373,7 +374,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	return true;
 }
 
-static void handle_receive_packets(struct xsk_socket_info *xsk)
+static void handle_receive_packets(struct xsk_socket_info *xsk, int* nbatched)
 {
 	unsigned int rcvd, stock_frames, i;
 	uint32_t idx_rx = 0, idx_fq = 0;
@@ -411,7 +412,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
-		if (!process_packet(xsk, addr, len)) {
+		if (!process_packet(xsk, addr, len, nbatched)) {
 			printf("Couldn't send!\n");
 			xsk_free_umem_frame(xsk, addr);
 		}
@@ -435,6 +436,8 @@ static void rx_and_process(void* args)
 {
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	int* batch_ar = th_args->batch_ar;
+
 	struct timespec timeout_end;
 	struct timespec timeout_elapsed;
 
@@ -456,26 +459,41 @@ static void rx_and_process(void* args)
 		}
 		else {
 			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-				handle_receive_packets(xsk_sockets[sockidx]);
+				handle_receive_packets(xsk_sockets[sockidx], &batch_ar[sockidx]);
 			}
 		}
+		
 		// Check timeout
-		if (num_tx_packets > 0) {
+		bool timeout_valid = false;
+		for (int i = 0; i < NUM_SOCKETS; ++i) {
+			if (batch_ar[i] > 0)  {
+				timeout_valid = true;
+				break;
+			}
+		}
+		if (timeout_valid) {
 			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
 			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
 			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
 				timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
 			} else {
-				timeout_elapsed_time.tv_sec--;
-				timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
+				timeout_elapsed.tv_sec--;
+				timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
 			}
 
 			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
 				printf("timeout\n");
-				xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-				xsk->outstanding_tx += num_tx_packets;
-				num_tx_packets = 0;
-				complete_tx(xsk);
+
+				for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
+					int num_batched = batch_ar[idx];
+					if (num_batched > 0) {
+						struct xsk_socket* xsk = xsk_sockets[idx]->xsk;
+						xsk_ring_prod__submit(&xsk->tx, num_batched);
+						xsk->outstanding_tx += num_batched;
+						batch_ar[idx] = 0;
+						complete_tx(xsk);
+					}
+				}
 			}
 		}
 	}	
@@ -593,6 +611,7 @@ int main(int argc, char **argv)
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
 	struct xsk_umem_info *umems[NUM_SOCKETS];
 	struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
+	int batch_ar[NUM_SOCKETS];
 	pthread_t stats_poll_thread;
 	int err;
 	char errmsg[1024];
@@ -699,6 +718,7 @@ int main(int argc, char **argv)
 
 	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
 	th_args->xskis = xsk_sockets;
+	th_args->batch_ar = batch_ar;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
