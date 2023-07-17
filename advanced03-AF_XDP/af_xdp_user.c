@@ -40,7 +40,7 @@ function accordingly
 #define NUM_FRAMES         4096
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
-#define TX_BATCH_SIZE	   20
+#define TX_BATCH_SIZE	   50
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
