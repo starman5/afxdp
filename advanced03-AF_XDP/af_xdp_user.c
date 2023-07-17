@@ -341,8 +341,8 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	// Swap source and destination port
 	unsigned char* ip_data = (unsigned char*)iph + (iph->ihl * 4);
 	udph = (struct udphdr*)ip_data;
-	printf("src: %d\n", udph->source);
-	printf("dst: %d\n", udph->dest);
+	//printf("src: %d\n", udph->source);
+	//printf("dst: %d\n", udph->dest);
 	uint16_t tmp = udph->source;
 	udph->source = udph->dest;
 	udph->dest = tmp;
