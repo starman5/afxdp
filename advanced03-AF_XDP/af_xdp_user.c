@@ -482,7 +482,7 @@ static void rx_and_process(void* args)
 			}
 
 			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
-				printf("timeout\n");
+				printf("timeout: %d\n", num_packets);
 
 				for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
 					int num_batched = batch_ar[idx];
