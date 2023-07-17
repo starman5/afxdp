@@ -468,7 +468,6 @@ static void rx_and_process(void* args)
 			else {
 				ret = poll(fds, nfds, 10);
 				if (ret == 0) {
-					printf("timeout: %d\n", num_packets);
 					for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
 						int num_batched = batch_ar[idx];
 						if (num_batched > 0) {
