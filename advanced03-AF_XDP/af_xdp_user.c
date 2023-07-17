@@ -323,6 +323,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	struct in_addr tmp_ip;
 	struct ethhdr *eth = (struct ethhdr *) pkt;
 	struct iphdr *iph = (struct iphdr *) (eth + 1);
+	struct udphdr *udph = NULL;
 		
 	if (ntohs(eth->h_proto) != ETH_P_IP)
 			return false;
@@ -336,6 +337,12 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
 	memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
 	memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
+
+	// Swap source and destination port
+	udph = (struct udphdr*) ((char*)(iph + (iph->ihl * 4)));
+	uint16_t tmp = udphdr->source;
+	udphdr->source = udphdr->dest;
+	udphdr->dest = tmp;
 		
 
 	/* Here we sent the packet out of the receive port. Note that
