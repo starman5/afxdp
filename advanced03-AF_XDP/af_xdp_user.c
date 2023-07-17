@@ -266,7 +266,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	uint32_t idx_cq;
 
 	if (!xsk->outstanding_tx) {
-		printf("No outstanding\n");
+		//printf("No outstanding\n");
 		return;
 	}
 
