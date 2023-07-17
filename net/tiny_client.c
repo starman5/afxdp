@@ -14,6 +14,7 @@ UDP client, meant to stress the server, designed to measure throughput
 #include <sched.h>
 
 #define SERVER_IP "192.168.6.1"   // Change this to the ip address of the server
+#define CLIENT_IP "192.168.6.2"
 #define SERVER_PORT 8889
 #define NUM_CORES 100
 #define TABLE_SIZE  10000
@@ -64,18 +65,36 @@ void *send_message(void* arg) {
         exit(EXIT_FAILURE);
     }
 
+    // Configure source address and port
+    memset(&source_addr, 0, sizeof(source_addr));
+    source_addr.sin_family = AF_INET;
+    if (inet_pton(AF_INET, CLIENT_IP, &(source_addr.sin_addr)) <= 0) {
+        perror("Invalid address");
+        exit(EXIT_FAILURE);
+    }
+
+    // Bind socket to the source address and port
+    if (bind(sockfd, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
+        perror("Binding socket failed\n");
+        exit(EXIT_FAILURE);
+    }
+
     // Loop to send many NON messages and receive responses
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 4000000; ++i) {
+    for (int i = 0; i < 1000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(NON, key, "hello", buffer);
         ssize_t bytes_sent; 
+        // Send message
         bytes_sent = sendto(sockfd, buffer, strlen(buffer), MSG_WAITALL, (struct sockaddr*)&server_addr, (socklen_t)sizeof(server_addr));
         if (bytes_sent < 0) {
             perror("Sendto failed");
             exit(EXIT_FAILURE);
         }
+         // Wait for response back
+        memset(buffer, '\0', BUFFER_SZ);
+        int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
 
     }
 
