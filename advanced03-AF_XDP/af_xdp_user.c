@@ -1,3 +1,11 @@
+/*
+This is a general AF_XDP userspace program that can make use of any number of sockets,
+corresponding to any number of NIC rx queues, as well as any number of threads to poll
+on these sockets.  Completely reusable code for any use case.  Simply update the handle_packet()
+function accordingly
+*/
+
+
 #include <assert.h>
 #include <errno.h>
 #include <getopt.h>
@@ -32,11 +40,12 @@
 #define NUM_FRAMES         4096
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
-#define TX_BATCH_SIZE	   5
+#define TX_BATCH_SIZE	   20
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
-#define TIMEOUT_NSEC	   500000000
+#define TIMEOUT_NSEC	   100000000
+#define TIMEOUT_SEC		   5
 
 #define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
 #define SRC_MAC	"9c:dc:71:5d:41:f1"
@@ -50,6 +59,7 @@ size_t num_packets = 0;
 size_t num_ready = 0;
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
+bool batch_mode = true;
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -60,6 +70,7 @@ struct config cfg = {
 
 struct threadArgs {
 	struct xsk_socket_info** xskis;
+	int* batch_ar;
 };
 
 struct xsk_umem_info {
@@ -257,7 +268,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	uint32_t idx_cq;
 
 	if (!xsk->outstanding_tx) {
-		printf("No outstanding\n");
+		//printf("No outstanding\n");
 		return;
 	}
 
@@ -302,13 +313,12 @@ static inline void csum_replace2(__sum16 *sum, __be16 old, __be16 new)
 }
 
 static bool process_packet(struct xsk_socket_info *xsk,
-			   uint64_t addr, uint32_t len)
+			   uint64_t addr, uint32_t len, int* nbatched)
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
 	++num_packets;
 
-	
 	int ret;
 	uint32_t tx_idx = 0;
 	uint8_t tmp_mac[ETH_ALEN];
@@ -354,19 +364,25 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	//++num_tx_packets;
-	//if (num_tx_packets >= TX_BATCH_SIZE) {
+	if (batch_mode) {
+		(*nbatched) += 1;
+		if (*nbatched >= TX_BATCH_SIZE) {
+			xsk_ring_prod__submit(&xsk->tx, (*nbatched));
+			xsk->outstanding_tx += (*nbatched);
+			(*nbatched) = 0;
+		}
+	}
+	else {
 		xsk_ring_prod__submit(&xsk->tx, 1);
 		xsk->outstanding_tx += 1;
-		//num_tx_packets = 0;
-	//}
+	}
 
 	xsk->stats.tx_bytes += len;
 	xsk->stats.tx_packets++;
 	return true;
 }
 
-static void handle_receive_packets(struct xsk_socket_info *xsk)
+static void handle_receive_packets(struct xsk_socket_info *xsk, int* nbatched)
 {
 	unsigned int rcvd, stock_frames, i;
 	uint32_t idx_rx = 0, idx_fq = 0;
@@ -404,7 +420,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
-		if (!process_packet(xsk, addr, len)) {
+		if (!process_packet(xsk, addr, len, nbatched)) {
 			printf("Couldn't send!\n");
 			xsk_free_umem_frame(xsk, addr);
 		}
@@ -428,6 +444,8 @@ static void rx_and_process(void* args)
 {
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	int* batch_ar = th_args->batch_ar;
+
 	struct timespec timeout_end;
 	struct timespec timeout_elapsed;
 
@@ -441,36 +459,74 @@ static void rx_and_process(void* args)
 		fds[sockidx].events = POLLIN;
 	}
 
-
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
-			ret = poll(fds, nfds, -1);
-			handle_receive_packets(xsk_sockets[0]);
+			if (num_packets == 0 || !batch_mode) {
+				ret = poll(fds, nfds, -1);
+				handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
+			}
+			else {
+				ret = poll(fds, nfds, 10);
+				if (ret == 0) {
+					printf("timeout: %d\n", num_packets);
+					for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
+						int num_batched = batch_ar[idx];
+						if (num_batched > 0) {
+							struct xsk_socket_info* xsk = xsk_sockets[idx];
+							xsk_ring_prod__submit(&xsk->tx, num_batched);
+							xsk->outstanding_tx += num_batched;
+							batch_ar[idx] = 0;
+							complete_tx(xsk);
+						}
+					}
+					batch_mode = false;
+					continue;
+				}
+				handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
+			}
 		}
 		else {
 			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-				handle_receive_packets(xsk_sockets[sockidx]);
-			}
-		}
-		// Check timeout
-		/*if (num_tx_packets > 0) {
-			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
-			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
-			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
-				timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
-			} else {
-				timeout_elapsed_time.tv_sec--;
-				timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
+				handle_receive_packets(xsk_sockets[sockidx], &batch_ar[sockidx]);
 			}
 
-			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
-				printf("timeout\n");
-				xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-				xsk->outstanding_tx += num_tx_packets;
-				num_tx_packets = 0;
-				complete_tx(xsk);
+			// Check timeout
+			bool timeout_valid = false;
+			for (int i = 0; i < NUM_SOCKETS; ++i) {
+				if (batch_ar[i] > 0)  {
+					timeout_valid = true;
+					break;
+				}
 			}
-		}*/
+			if (timeout_valid) {
+				clock_gettime(CLOCK_MONOTONIC, &timeout_end);
+				timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
+				if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
+					timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
+				} else {
+					timeout_elapsed.tv_sec--;
+					timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
+				}
+
+				if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
+					printf("timeout: %d\n", num_packets);
+
+					for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
+						int num_batched = batch_ar[idx];
+						if (num_batched > 0) {
+							struct xsk_socket_info* xsk = xsk_sockets[idx];
+							xsk_ring_prod__submit(&xsk->tx, num_batched);
+							xsk->outstanding_tx += num_batched;
+							batch_ar[idx] = 0;
+							complete_tx(xsk);
+						}
+					}
+
+					// Go back to non-batching mode
+					batch_mode = false;
+				}
+			}
+		}
 	}	
 }
 
@@ -586,6 +642,7 @@ int main(int argc, char **argv)
 	struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
 	struct xsk_umem_info *umems[NUM_SOCKETS];
 	struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
+	int batch_ar[NUM_SOCKETS];
 	pthread_t stats_poll_thread;
 	int err;
 	char errmsg[1024];
@@ -685,13 +742,17 @@ int main(int argc, char **argv)
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
+
+		batch_ar[sockidx] = 0;
 	}
+
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 
 	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
 	th_args->xskis = xsk_sockets;
+	th_args->batch_ar = batch_ar;
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
 	}
