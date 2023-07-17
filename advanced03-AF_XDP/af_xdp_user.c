@@ -459,52 +459,61 @@ static void rx_and_process(void* args)
 		fds[sockidx].events = POLLIN;
 	}
 
-
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
-			ret = poll(fds, nfds, -1);
-			handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
+			if (num_packets == 0) {
+				ret = poll(fds, nfds, -1);
+				handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
+			}
+			else {
+				ret = poll(fds, nfds, 10);
+			}
+
+			if (ret == 0) {
+				printf("timeout: %d\n", num_packets);
+				batch_mode = false;
+			}
 		}
 		else {
 			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 				handle_receive_packets(xsk_sockets[sockidx], &batch_ar[sockidx]);
 			}
-		}
-		
-		// Check timeout
-		bool timeout_valid = false;
-		for (int i = 0; i < NUM_SOCKETS; ++i) {
-			if (batch_ar[i] > 0)  {
-				timeout_valid = true;
-				break;
-			}
-		}
-		if (timeout_valid) {
-			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
-			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
-			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
-				timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
-			} else {
-				timeout_elapsed.tv_sec--;
-				timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
-			}
 
-			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
-				printf("timeout: %d\n", num_packets);
-
-				for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
-					int num_batched = batch_ar[idx];
-					if (num_batched > 0) {
-						struct xsk_socket_info* xsk = xsk_sockets[idx];
-						xsk_ring_prod__submit(&xsk->tx, num_batched);
-						xsk->outstanding_tx += num_batched;
-						batch_ar[idx] = 0;
-						complete_tx(xsk);
-					}
+			// Check timeout
+			bool timeout_valid = false;
+			for (int i = 0; i < NUM_SOCKETS; ++i) {
+				if (batch_ar[i] > 0)  {
+					timeout_valid = true;
+					break;
+				}
+			}
+			if (timeout_valid) {
+				clock_gettime(CLOCK_MONOTONIC, &timeout_end);
+				timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
+				if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
+					timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
+				} else {
+					timeout_elapsed.tv_sec--;
+					timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
 				}
 
-				// Go back to non-batching mode
-				batch_mode = false;
+				if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
+					printf("timeout: %d\n", num_packets);
+
+					for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
+						int num_batched = batch_ar[idx];
+						if (num_batched > 0) {
+							struct xsk_socket_info* xsk = xsk_sockets[idx];
+							xsk_ring_prod__submit(&xsk->tx, num_batched);
+							xsk->outstanding_tx += num_batched;
+							batch_ar[idx] = 0;
+							complete_tx(xsk);
+						}
+					}
+
+					// Go back to non-batching mode
+					batch_mode = false;
+				}
 			}
 		}
 	}	
