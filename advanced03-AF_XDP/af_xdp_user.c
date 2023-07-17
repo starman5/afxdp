@@ -287,7 +287,7 @@ static void complete_tx(struct xsk_socket_info *xsk)
 			completed : xsk->outstanding_tx;
 	}
 	else {
-		printf("No completed\n");
+		//printf("No completed\n");
 	}
 }
 
