@@ -461,13 +461,14 @@ static void rx_and_process(void* args)
 
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
-			if (num_packets == 0) {
+			if (num_packets == 0 || !batch_mode) {
 				ret = poll(fds, nfds, -1);
 				handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
 			}
 			else {
 				ret = poll(fds, nfds, 10);
 				if (ret == 0) {
+					printf("timeout: %d\n", num_packets);
 					for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
 						int num_batched = batch_ar[idx];
 						if (num_batched > 0) {
@@ -479,6 +480,7 @@ static void rx_and_process(void* args)
 						}
 					}
 					batch_mode = false;
+					continue;
 				}
 				handle_receive_packets(xsk_sockets[0], &batch_ar[0]);
 			}
