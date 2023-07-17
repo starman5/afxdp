@@ -40,10 +40,11 @@ function accordingly
 #define NUM_FRAMES         4096
 #define FRAME_SIZE         XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE      64
-#define TX_BATCH_SIZE	   64
+#define TX_BATCH_SIZE	   5
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   1
+#define TIMEOUT_NSEC	   500000000
 
 #define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
 #define SRC_MAC	"9c:dc:71:5d:41:f1"
@@ -56,6 +57,7 @@ function accordingly
 size_t num_packets = 0;
 size_t num_ready = 0;
 size_t num_tx_packets = 0;
+struct timespec timeout_start = {0, 0};
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -350,8 +352,12 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	xsk_ring_prod__submit(&xsk->tx, 1);
-	xsk->outstanding_tx += 1;
+	++num_tx_packets
+	//if (num_tx_packets >= TX_BATCH_SIZE) {
+		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+		xsk->outstanding_tx += num_tx_packets;
+		num_tx_packets = 0;
+	//}
 
 	xsk->stats.tx_bytes += len;
 	xsk->stats.tx_packets++;
@@ -408,6 +414,9 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 
 	/* Do we need to wake up the kernel for transmission */
 	complete_tx(xsk);
+
+	// Reset timeout start
+	clock_gettime(CLOCK_MONOTONIC, &timeout_start);
   }
 
 //static void rx_and_process(struct config* cfg,
@@ -417,6 +426,8 @@ static void rx_and_process(void* args)
 {
 	struct threadArgs* th_args = (struct threadArgs*)args;
 	struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	struct timespec timeout_end;
+	struct timespec timeout_elapsed;
 
 	struct pollfd fds[1];
 	int ret = 1;
@@ -428,6 +439,7 @@ static void rx_and_process(void* args)
 		fds[sockidx].events = POLLIN;
 	}
 
+
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, nfds, -1);
@@ -438,6 +450,25 @@ static void rx_and_process(void* args)
 				handle_receive_packets(xsk_sockets[sockidx]);
 			}
 		}
+		// Check timeout
+		/*if (num_tx_packets > 0) {
+			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
+			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
+			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
+				timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
+			} else {
+				timeout_elapsed_time.tv_sec--;
+				timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
+			}
+
+			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
+				printf("timeout\n");
+				xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+				xsk->outstanding_tx += num_tx_packets;
+				num_tx_packets = 0;
+				complete_tx(xsk);
+			}
+		}*/
 	}	
 }
 
