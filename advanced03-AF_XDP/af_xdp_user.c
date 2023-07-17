@@ -711,7 +711,10 @@ int main(int argc, char **argv)
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
+
+		batch_ar[sockidx] = 0;
 	}
+
 	
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
