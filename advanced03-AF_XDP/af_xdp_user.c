@@ -59,6 +59,7 @@ size_t num_packets = 0;
 size_t num_ready = 0;
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
+bool batch_mode = true;
 
 static struct xdp_program *prog;
 int xsk_map_fd;
@@ -363,11 +364,17 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	(*nbatched) += 1;
-	if (*nbatched >= TX_BATCH_SIZE) {
-		xsk_ring_prod__submit(&xsk->tx, (*nbatched));
-		xsk->outstanding_tx += (*nbatched);
-		(*nbatched) = 0;
+	if (batch_mode) {
+		(*nbatched) += 1;
+		if (*nbatched >= TX_BATCH_SIZE) {
+			xsk_ring_prod__submit(&xsk->tx, (*nbatched));
+			xsk->outstanding_tx += (*nbatched);
+			(*nbatched) = 0;
+		}
+	}
+	else {
+		xsk_ring_prod__submit(&xsk->tx, 1);
+		xsk->outstanding_tx += 1;
 	}
 
 	xsk->stats.tx_bytes += len;
@@ -465,14 +472,14 @@ static void rx_and_process(void* args)
 		}
 		
 		// Check timeout
-		/*bool timeout_valid = false;
+		bool timeout_valid = false;
 		for (int i = 0; i < NUM_SOCKETS; ++i) {
 			if (batch_ar[i] > 0)  {
 				timeout_valid = true;
 				break;
 			}
-		}*/
-		/*if (timeout_valid) {
+		}
+		if (timeout_valid) {
 			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
 			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
 			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
@@ -495,8 +502,11 @@ static void rx_and_process(void* args)
 						complete_tx(xsk);
 					}
 				}
+
+				// Go back to non-batching mode
+				batch_mode = false;
 			}
-		}*/
+		}
 	}	
 }
 
