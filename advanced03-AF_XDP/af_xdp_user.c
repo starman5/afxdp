@@ -489,7 +489,7 @@ static void rx_and_process(void* args)
 				timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
 			}
 
-			if (timeout_elapsed.tv_sec >= TIMEOUT_SEC) {
+			if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
 				printf("timeout: %d\n", num_packets);
 
 				for (int idx = 0; idx < NUM_SOCKETS; ++idx) {
