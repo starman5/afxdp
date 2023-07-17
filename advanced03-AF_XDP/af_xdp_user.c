@@ -262,10 +262,11 @@ static void complete_tx(struct xsk_socket_info *xsk)
 	unsigned int completed;
 	uint32_t idx_cq;
 
-	if (!xsk->outstanding_tx)
+	if (!xsk->outstanding_tx) {
 		printf("No outstanding\n");
 		return;
-
+	}
+	
 	sendto(xsk_socket__fd(xsk->xsk), NULL, 0, MSG_DONTWAIT, NULL, 0);
 
 	/* Collect/free completed TX buffers */
