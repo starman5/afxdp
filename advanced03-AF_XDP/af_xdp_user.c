@@ -316,7 +316,6 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	++num_packets;
 
-	
 	int ret;
 	uint32_t tx_idx = 0;
 	uint8_t tmp_mac[ETH_ALEN];
@@ -362,12 +361,12 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	//++num_tx_packets;
-	//if (num_tx_packets >= TX_BATCH_SIZE) {
-		xsk_ring_prod__submit(&xsk->tx, 1);
-		xsk->outstanding_tx += 1;
-		//num_tx_packets = 0;
-	//}
+	++num_tx_packets;
+	if (num_tx_packets >= TX_BATCH_SIZE) {
+		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+		xsk->outstanding_tx += num_tx_packets;
+		num_tx_packets = 0;
+	}
 
 	xsk->stats.tx_bytes += len;
 	xsk->stats.tx_packets++;
@@ -461,7 +460,7 @@ static void rx_and_process(void* args)
 			}
 		}
 		// Check timeout
-		/*if (num_tx_packets > 0) {
+		if (num_tx_packets > 0) {
 			clock_gettime(CLOCK_MONOTONIC, &timeout_end);
 			timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
 			if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
@@ -478,7 +477,7 @@ static void rx_and_process(void* args)
 				num_tx_packets = 0;
 				complete_tx(xsk);
 			}
-		}*/
+		}
 	}	
 }
 
