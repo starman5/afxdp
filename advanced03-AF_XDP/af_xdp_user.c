@@ -340,9 +340,9 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	// Swap source and destination port
 	udph = (struct udphdr*) ((char*)(iph + (iph->ihl * 4)));
-	uint16_t tmp = udphdr->source;
-	udphdr->source = udphdr->dest;
-	udphdr->dest = tmp;
+	uint16_t tmp = udph->source;
+	udph->source = udph->dest;
+	udph->dest = tmp;
 		
 
 	/* Here we sent the packet out of the receive port. Note that
