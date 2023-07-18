@@ -10,6 +10,7 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 #include <sys/resource.h>
 
@@ -34,8 +35,8 @@
 #define RX_BATCH_SIZE      64
 #define TX_BATCH_SIZE	   5
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS		   1
-#define NUM_THREADS		   1
+#define NUM_SOCKETS		   20
+#define NUM_THREADS		   NUM_SOCKETS
 #define TIMEOUT_NSEC	   500000000
 
 #define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
@@ -46,8 +47,8 @@
 #define SRC_PORT	8889
 #define DST_PORT	8889
 
-size_t num_packets = 0;
-size_t num_ready = 0;
+atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
+atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
 
@@ -59,7 +60,8 @@ struct config cfg = {
 };
 
 struct threadArgs {
-	struct xsk_socket_info** xskis;
+	struct xsk_socket_info* xski;
+	int idx;
 };
 
 struct xsk_umem_info {
@@ -89,6 +91,15 @@ struct xsk_socket_info {
 	struct stats_record stats;
 	struct stats_record prev_stats;
 };
+
+// Convenient wrapper to pin a thread to a core
+int pin_thread_to_core(int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+
+    return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+}
 
 static inline __u32 xsk_ring_prod__free(struct xsk_ring_prod *r)
 {
@@ -306,7 +317,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-	++num_packets;
+	atomic_fetch_add(&num_packets, 1);
 
 	
 	int ret;
@@ -378,7 +389,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	if (!rcvd)
 		return;
 
-	++num_ready;
+	atomic_fetch_add(&num_ready, 1);
 	/* Stuff the ring with as much frames as possible */
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
 					xsk_umem_free_frames(xsk));
@@ -427,19 +438,24 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 static void rx_and_process(void* args)
 {
 	struct threadArgs* th_args = (struct threadArgs*)args;
-	struct xsk_socket_info **xsk_sockets = th_args->xskis;
+	struct xsk_socket_info *xski = th_args->xski;
+	int idx = th_args->idx;
+
 	struct timespec timeout_end;
 	struct timespec timeout_elapsed;
 
+	if (pin_thread_to_core(idx) != 0) {
+        perror("Could not pin thread to core\n");
+        exit(EXIT_FAILURE);
+    }
+
 	struct pollfd fds[1];
 	int ret = 1;
-	int nfds = NUM_SOCKETS;
+	int nfds = 1;
 
 	memset(fds, 0, sizeof(fds));
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		fds[sockidx].fd = xsk_socket__fd(xsk_sockets[sockidx]->xsk);
-		fds[sockidx].events = POLLIN;
-	}
+	fds[0].fd = xsk_socket__fd(xski->xsk);
+	fds[0].events = POLLIN;
 
 
 	while (!global_exit) {
@@ -448,9 +464,7 @@ static void rx_and_process(void* args)
 			handle_receive_packets(xsk_sockets[0]);
 		}
 		else {
-			for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-				handle_receive_packets(xsk_sockets[sockidx]);
-			}
+			handle_receive_packets(xski);
 		}
 		// Check timeout
 		/*if (num_tx_packets > 0) {
@@ -579,7 +593,7 @@ static void exit_application(int signal)
 int main(int argc, char **argv)
 {
 	int ret;
-	void *packet_buffer;
+	void *packet_buffers[NUM_SOCKETS];
 	uint64_t packet_buffer_size;
 	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
 	DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
@@ -659,26 +673,26 @@ int main(int argc, char **argv)
 
 	/* Allocate memory for NUM_FRAMES of the default XDP frame size */
 	packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
-	if (posix_memalign(&packet_buffer,
-			   getpagesize(), /* PAGE_SIZE aligned */
-			   packet_buffer_size)) {
-		fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
-			strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-
-	/* Initialize shared packet_buffer for umem usage */
+	
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-		umems[sockidx] = configure_xsk_umem(packet_buffer, packet_buffer_size);
+		// Allocate packet buffer
+		if (posix_memalign(&(packet_buffers[sockidx]),
+				getpagesize(), /* PAGE_SIZE aligned */
+				packet_buffer_size)) {
+			fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
+				strerror(errno));
+			exit(EXIT_FAILURE);
+		}
+
+		/* Configure UMEM */
+		umems[sockidx] = configure_xsk_umem(packet_buffers[sockidx], packet_buffer_size);
 		if (umems[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't create umem \"%s\"\n",
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-	}
 
-	/* Open and configure the AF_XDP (xsk) sockets */
-	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+		/* Open and configure the AF_XDP (xsk) sockets */
 		xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], sockidx);
 		if (xsk_sockets[sockidx] == NULL) {
 			fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
@@ -690,10 +704,12 @@ int main(int argc, char **argv)
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 
-	struct threadArgs* th_args = malloc(sizeof(struct threadArgs));
-	th_args->xskis = xsk_sockets;
+	struct threadArgs* threadArgs_ar[NUM_THREADS];
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, th_args);
+		threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
+		threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
+		threadArgs_ar[th_idx]->idx = th_idx;
+		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, threadArgs_ar[th_idx]);
 	}
 	
 	// Wait for all threads to finish
@@ -707,6 +723,10 @@ int main(int argc, char **argv)
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		xsk_socket__delete(xsk_sockets[sockidx]->xsk);
 		xsk_umem__delete(umems[sockidx]->umem);
+	}
+
+	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+		free(threadArgs_ar[th_idx]);
 	}
 
 	return EXIT_OK;
