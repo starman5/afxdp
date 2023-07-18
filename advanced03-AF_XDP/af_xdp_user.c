@@ -515,6 +515,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
             break;
 
         case END:
+			;
             uint64_t total_count = 0;
             for (int i = 0; i < NUM_SOCKETS; ++i) {
                 total_count += countAr[i].count;
