@@ -39,8 +39,10 @@ EXTRA_DEPS +=
 KERN_USER_H ?= $(wildcard common_kern_user.h)
 
 CFLAGS += -I$(LIB_DIR)/install/include $(EXTRA_CFLAGS)
+CFLAGS += -pthread
 BPF_CFLAGS += -I$(LIB_DIR)/install/include $(EXTRA_CFLAGS)
 LDFLAGS += -L$(LIB_DIR)/install/lib
+LDFLAGS += -pthread
 
 BPF_HEADERS := $(wildcard $(HEADER_DIR)/*/*.h) $(wildcard $(INCLUDE_DIR)/*/*.h)
 
