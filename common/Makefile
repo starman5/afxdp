@@ -4,7 +4,7 @@ include $(LIB_DIR)/defines.mk
 
 all: common_params.o common_user_bpf_xdp.o
 
-CFLAGS += -I$(LIB_DIR)/install/include -pthread
+CFLAGS += -I$(LIB_DIR)/install/include
 
 common_params.o: common_params.c common_params.h
 	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
