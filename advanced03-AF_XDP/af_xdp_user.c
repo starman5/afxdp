@@ -591,7 +591,7 @@ static void exit_application(int signal)
 	uint64_t npackets = 0;
 	for (int i = 0; i < NUM_THREADS; ++i) {
 		printf("thread %d: %d\n", i, countAr[i].count);
-		npackets += countAr[i].count
+		npackets += countAr[i].count;
 	}
 	printf("total packets: %d\n", npackets);
 	int err;
