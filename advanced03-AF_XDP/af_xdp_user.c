@@ -466,9 +466,9 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	struct udphdr *udph = NULL;
 
 	// Retrieve payload
-	unsigned char* ip_data = (unsigned char*)iph + (iph->ihl * 4);
-	unsigned char* udp_data = ip_data + sizeof(struct udphdr);
-	printf("udp payload: %s\n", udp_data);
+	unsigned char* ip_payload = (unsigned char*)iph + (iph->ihl * 4);
+	unsigned char* udp_payload = ip_payload + sizeof(struct udphdr);
+	printf("udp payload: %s\n", udp_payload);
 
 		
 	if (ntohs(eth->h_proto) != ETH_P_IP)
