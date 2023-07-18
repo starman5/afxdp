@@ -65,7 +65,6 @@ void *send_message(void* arg) {
         exit(EXIT_FAILURE);
     }
 
-
     // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
@@ -82,7 +81,7 @@ void *send_message(void* arg) {
 
     // Loop to send many SET messages
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 100000; ++i) {
+    for (int i = 0; i < 10000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(SET, key, "hello", buffer);

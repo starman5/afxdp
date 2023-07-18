@@ -454,9 +454,6 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-	countAr[idx].count += 1;
-
-
 	int ret;
 	uint32_t tx_idx = 0;
 	uint8_t tmp_mac[ETH_ALEN];
@@ -467,8 +464,73 @@ static bool process_packet(struct xsk_socket_info *xsk,
 
 	// Retrieve payload
 	unsigned char* ip_payload = (unsigned char*)iph + (iph->ihl * 4);
-	unsigned char* udp_payload = ip_payload + sizeof(struct udphdr);
-	printf("udp payload: %s\n", udp_payload);
+	unsigned char* buffer = ip_payload + sizeof(struct udphdr);
+
+	// Process request
+	char* special_message = NULL;
+    const char* default_message = "Message received";
+    //buffer[bytes_received] = '\0';  // Make buffer a null-terminated string
+    //printf("Received message from client: %s\n", buffer);
+
+    uint64_t comm = ((int)(buffer[0] - '0'));
+    uint64_t key;
+    char* value = (char*)malloc(MAX_BUFFER_SIZE - sizeof(comm) - sizeof(key));
+
+     // Get key from serialized message
+    int pos = 2;    // Starting position of key in serialized string
+    int numbytes = 0;
+    while (buffer[pos] != '|') {
+        ++numbytes;
+        ++pos;
+    }
+    char keybuf[10];
+    memcpy(keybuf, &buffer[2], numbytes);
+    keybuf[numbytes] = '\0';
+    char* endptr;
+    key = strtol(keybuf, &endptr, 10);
+
+    // Get the value
+    ++pos;
+    strcpy(value, &buffer[pos]);
+
+    // Process message from the client
+    switch (comm) {
+        case NON:
+            break;
+        case SET:
+			printf("set %d to %s\n", key, value);
+            table_set(hashtable, key, value, locks);
+            break;
+
+        case GET:
+            char* val = table_get(hashtable, key, locks);
+            if (val && val[0] == '*') {    // Prevent compiler optimization
+                printf("star\n");
+            }
+            break;
+
+        case DEL:
+            table_delete(hashtable, key, locks);
+            break;
+
+        case END:
+            received_end = true;
+            uint64_t total_count = 0;
+            for (int i = 0; i < NUM_CORES; ++i) {
+                total_count += countArr[i].count;
+                printf("thread %d: %ld\n", i, countArr[i].count); 
+            }
+            // Get the total number of processed requests and send back to user
+            char end_message[15];
+            sprintf(end_message, "%ld", total_count);
+            special_message = end_message;
+            break;
+
+        default:
+            special_message = "Command Not Found";
+    }
+
+	countAr[idx].count += 1;
 
 		
 	if (ntohs(eth->h_proto) != ETH_P_IP)
