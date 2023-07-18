@@ -461,7 +461,7 @@ static void rx_and_process(void* args)
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, nfds, -1);
-			handle_receive_packets(xsk_sockets[0]);
+			handle_receive_packets(xski);
 		}
 		else {
 			handle_receive_packets(xski);
