@@ -38,9 +38,9 @@ EXTRA_DEPS +=
 # BPF-prog kern and userspace shares struct via header file:
 KERN_USER_H ?= $(wildcard common_kern_user.h)
 
-CFLAGS += -I$(LIB_DIR)/install/include -pthread $(EXTRA_CFLAGS)
-BPF_CFLAGS += -I$(LIB_DIR)/install/include -pthread $(EXTRA_CFLAGS)
-LDFLAGS += -L$(LIB_DIR)/install/lib -pthread
+CFLAGS += -I$(LIB_DIR)/install/include $(EXTRA_CFLAGS)
+BPF_CFLAGS += -I$(LIB_DIR)/install/include $(EXTRA_CFLAGS)
+LDFLAGS += -L$(LIB_DIR)/install/lib
 
 BPF_HEADERS := $(wildcard $(HEADER_DIR)/*/*.h) $(wildcard $(INCLUDE_DIR)/*/*.h)
 

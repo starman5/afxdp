@@ -96,13 +96,13 @@ struct xsk_socket_info {
 };
 
 // Convenient wrapper to pin a thread to a core
-int pin_thread_to_core(int core_id) {
+/*int pin_thread_to_core(int core_id) {
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
     CPU_SET(core_id, &cpuset);
 
     return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-}
+}*/
 
 static inline __u32 xsk_ring_prod__free(struct xsk_ring_prod *r)
 {
@@ -447,10 +447,10 @@ static void rx_and_process(void* args)
 	struct timespec timeout_end;
 	struct timespec timeout_elapsed;
 
-	if (pin_thread_to_core(idx) != 0) {
+	/*if (pin_thread_to_core(idx) != 0) {
         perror("Could not pin thread to core\n");
         exit(EXIT_FAILURE);
-    }
+    }*/
 
 	struct pollfd fds[1];
 	int ret = 1;
