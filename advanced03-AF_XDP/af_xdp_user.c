@@ -449,7 +449,7 @@ static void rx_and_process(void* args)
 	struct timespec timeout_end;
 	struct timespec timeout_elapsed;
 
-	if (pin_thread_to_core(idx) != 0) {
+	if (pin_thread_to_core(0) != 0) {
         perror("Could not pin thread to core\n");
         exit(EXIT_FAILURE);
     }
