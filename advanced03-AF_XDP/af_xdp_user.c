@@ -12,8 +12,10 @@
 #include <unistd.h>
 #include <stdatomic.h>
 #include <sched.h>
+#include <stdalign.h>
 
 #include <sys/resource.h>
+#include <sys/sysinfo.h>
 
 #include <bpf/bpf.h>
 #include <xdp/xsk.h>
