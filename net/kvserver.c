@@ -17,7 +17,7 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define SERVER_PORT 8889
-#define NUM_CORES   1
+#define NUM_CORES   20
 #define TABLE_SIZE  10000
 #define CACHE_LINE_SIZE 64
 
@@ -173,7 +173,7 @@ void* handle_request(void* arg) {
     int core_id = threadArgs->core_id;
     
     // Pin the thread to a core
-    if (pin_thread_to_core(core_id * 2) != 0) {
+    if (pin_thread_to_core(core_id) != 0) {
         perror("Could not pin thread to core\n");
         exit(EXIT_FAILURE);
     }
