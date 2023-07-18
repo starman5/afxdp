@@ -11,6 +11,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdatomic.h>
+#include <sched.h>
 
 #include <sys/resource.h>
 
