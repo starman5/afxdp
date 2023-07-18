@@ -14,6 +14,7 @@ UDP client, meant to stress the server, designed to measure throughput
 #include <sched.h>
 
 #define SERVER_IP "192.168.6.1"   // Change this to the ip address of the server
+#define CLIENT_IP "192.168.6.2"
 #define SERVER_PORT 8889
 #define NUM_CORES 100
 #define TABLE_SIZE  10000
@@ -46,7 +47,7 @@ void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
 void *send_message(void* arg) {
     int core_id = *((int*)arg);  
     int sockfd;
-    struct sockaddr_in server_addr;
+    struct sockaddr_in server_addr, source_addr;
     socklen_t addr_len = sizeof(server_addr);
 
     // Create socket
@@ -58,10 +59,24 @@ void *send_message(void* arg) {
     // Configure server address
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(SERVER_PORT);
-        
+    server_addr.sin_port = htons(SERVER_PORT);        
     if (inet_pton(AF_INET, SERVER_IP, &server_addr.sin_addr) <= 0) {
         perror("Invalid address");
+        exit(EXIT_FAILURE);
+    }
+
+
+    // Configure source address
+    memset(&source_addr, 0, sizeof(source_addr));
+    source_addr.sin_family = AF_INET;
+    if (inet_pton(AF_INET, CLIENT_IP, &source_addr.sin_addr) <= 0) {
+        perror("Invalid address");
+        exit(EXIT_FAILURE);
+    }
+
+    // Bind socket to source_addr
+    if (bind(sockfd, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
+        perror("Binding socket failed\n");
         exit(EXIT_FAILURE);
     }
 
