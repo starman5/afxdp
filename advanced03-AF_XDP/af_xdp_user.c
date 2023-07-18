@@ -43,6 +43,7 @@
 #define NUM_SOCKETS		   20
 #define NUM_THREADS		   NUM_SOCKETS
 #define TIMEOUT_NSEC	   500000000
+#define CACHE_LINE_SIZE	   64
 
 #define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
 #define SRC_MAC	"9c:dc:71:5d:41:f1"
@@ -329,7 +330,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-	countAr[idx] += 1;
+	countAr[idx].count += 1;
 
 	
 	int ret;
@@ -588,9 +589,9 @@ static void *stats_poll(void *arg)
 static void exit_application(int signal)
 {
 	uint64_t npackets = 0;
-	for (int i = 0; i < NUM_THREADS) {
-		printf("thread %d: %d\n", i, countAr[i]);
-		npackets += countAr[i]
+	for (int i = 0; i < NUM_THREADS; ++i) {
+		printf("thread %d: %d\n", i, countAr[i].count);
+		npackets += countAr[i].count
 	}
 	printf("total packets: %d\n", npackets);
 	int err;
@@ -720,9 +721,9 @@ int main(int argc, char **argv)
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 
-	for (int i = 0; i < NUM_THREADS; ++i) [
+	for (int i = 0; i < NUM_THREADS; ++i) {
 		countAr[i].count = 0;
-	]
+	}
 	struct threadArgs* threadArgs_ar[NUM_THREADS];
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
