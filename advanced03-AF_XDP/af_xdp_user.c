@@ -498,7 +498,6 @@ static bool process_packet(struct xsk_socket_info *xsk,
         case NON:
             break;
         case SET:
-			printf("set %d to %s\n", key, value);
             table_set(hashtable, key, value, locks);
             break;
 
