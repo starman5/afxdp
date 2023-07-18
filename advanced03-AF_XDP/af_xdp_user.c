@@ -64,6 +64,11 @@ struct config cfg = {
 	.ifindex   = -1,
 };
 
+typedef struct counter {
+    uint64_t count;
+    char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
+} Counter;
+
 struct threadArgs {
 	struct xsk_socket_info* xski;
 	int idx;
@@ -96,6 +101,8 @@ struct xsk_socket_info {
 	struct stats_record stats;
 	struct stats_record prev_stats;
 };
+
+Counter countAr[NUM_THREADS];
 
 // Convenient wrapper to pin a thread to a core
 int pin_thread_to_core(int core_id) {
@@ -318,11 +325,11 @@ static inline void csum_replace2(__sum16 *sum, __be16 old, __be16 new)
 }
 
 static bool process_packet(struct xsk_socket_info *xsk,
-			   uint64_t addr, uint32_t len)
+			   uint64_t addr, uint32_t len, int idx)
 {
 	uint8_t *pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-	atomic_fetch_add(&num_packets, 1);
+	countAr[idx] += 1;
 
 	
 	int ret;
@@ -382,7 +389,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	return true;
 }
 
-static void handle_receive_packets(struct xsk_socket_info *xsk)
+static void handle_receive_packets(struct xsk_socket_info *xsk, int idx)
 {
 	unsigned int rcvd, stock_frames, i;
 	uint32_t idx_rx = 0, idx_fq = 0;
@@ -394,7 +401,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 	if (!rcvd)
 		return;
 
-	atomic_fetch_add(&num_ready, 1);
+	//atomic_fetch_add(&num_ready, 1);
 	/* Stuff the ring with as much frames as possible */
 	stock_frames = xsk_prod_nb_free(&xsk->umem->fq,
 					xsk_umem_free_frames(xsk));
@@ -420,7 +427,7 @@ static void handle_receive_packets(struct xsk_socket_info *xsk)
 		uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
 		uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
 
-		if (!process_packet(xsk, addr, len)) {
+		if (!process_packet(xsk, addr, len, idx)) {
 			printf("Couldn't send!\n");
 			xsk_free_umem_frame(xsk, addr);
 		}
@@ -466,10 +473,10 @@ static void rx_and_process(void* args)
 	while (!global_exit) {
 		if (cfg.xsk_poll_mode) {
 			ret = poll(fds, nfds, -1);
-			handle_receive_packets(xski);
+			handle_receive_packets(xski, idx);
 		}
 		else {
-			handle_receive_packets(xski);
+			handle_receive_packets(xski, idx);
 		}
 		// Check timeout
 		/*if (num_tx_packets > 0) {
@@ -580,8 +587,12 @@ static void *stats_poll(void *arg)
 
 static void exit_application(int signal)
 {
-	printf("received %d packets\n", num_packets);
-	printf("socket ready %d times\n", num_ready);
+	uint64_t npackets = 0;
+	for (int i = 0; i < NUM_THREADS) {
+		printf("thread %d: %d\n", i, countAr[i]);
+		npackets += countAr[i]
+	}
+	printf("total packets: %d\n", npackets);
 	int err;
 
 	cfg.unload_all = true;
@@ -709,6 +720,9 @@ int main(int argc, char **argv)
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 
+	for (int i = 0; i < NUM_THREADS; ++i) [
+		countAr[i].count = 0;
+	]
 	struct threadArgs* threadArgs_ar[NUM_THREADS];
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
