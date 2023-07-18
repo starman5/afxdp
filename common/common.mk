@@ -33,7 +33,7 @@ include $(LIB_DIR)/defines.mk
 # Create expansions for dependencies
 COMMON_H := ${COMMON_OBJS:.o=.h}
 
-EXTRA_DEPS += -pthread
+EXTRA_DEPS +=
 
 # BPF-prog kern and userspace shares struct via header file:
 KERN_USER_H ?= $(wildcard common_kern_user.h)
