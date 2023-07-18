@@ -503,6 +503,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
             break;
 
         case GET:
+			;
             char* val = table_get(hashtable, key, locks);
             if (val && val[0] == '*') {    // Prevent compiler optimization
                 printf("star\n");
@@ -514,11 +515,10 @@ static bool process_packet(struct xsk_socket_info *xsk,
             break;
 
         case END:
-            received_end = true;
             uint64_t total_count = 0;
-            for (int i = 0; i < NUM_CORES; ++i) {
-                total_count += countArr[i].count;
-                printf("thread %d: %ld\n", i, countArr[i].count); 
+            for (int i = 0; i < NUM_SOCKETS; ++i) {
+                total_count += countAr[i].count;
+                printf("thread %d: %ld\n", i, countAr[i].count); 
             }
             // Get the total number of processed requests and send back to user
             char end_message[15];
