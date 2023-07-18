@@ -3,6 +3,7 @@
 XDP_TARGETS  := af_xdp_kern
 USER_TARGETS := af_xdp_user
 LDLIBS+= -lpthread
+LDFLAGS+= -pthread
 
 COMMON_DIR = ../common
 
