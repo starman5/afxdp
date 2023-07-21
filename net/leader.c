@@ -17,8 +17,8 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 #include <stdatomic.h>
 
 // Change these to reflect the actual topology
-#define SERVER_IP "128.110.218.61"
-#define FOLLOWER_IP "128.110.218.72"
+#define SERVER_IP "192.168.6.1"
+#define FOLLOWER_IP "192.168.6.3"
 #define NUM_FOLLOWERS   1
 
 #define SERVER_PORT 8889
