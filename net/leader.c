@@ -145,7 +145,7 @@ int main(int argc, char* argv[]) {
 
     // Set up socket for the main thread
     int sockfd;
-    struct sockaddr_in server_addr;
+    struct sockaddr_in server_addr, source_addr;
     socklen_t addr_len = sizeof(struct sockaddr);
 
     // Create socket
