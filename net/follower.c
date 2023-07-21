@@ -17,6 +17,7 @@ UDP client, meant to stress the server, designed to measure latency
 // Change these to reflect the actual topology
 #define SERVER_IP "192.168.6.1"
 #define LEADER_IP  "192.168.6.2"
+#define CLIENT_IP   "192.168.6.3"
 
 #define SERVER_PORT 8889
 #define COMM_PORT   8890

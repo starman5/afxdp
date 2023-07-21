@@ -19,6 +19,7 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 // Change these to reflect the actual topology
 #define SERVER_IP "192.168.6.1"
 #define FOLLOWER_IP "192.168.6.3"
+#define CLIENT_IP   "192.168.6.2"
 #define NUM_FOLLOWERS   1
 
 #define SERVER_PORT 8889
