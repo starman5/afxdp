@@ -16,7 +16,7 @@ UDP client, meant to stress the server, designed to measure throughput
 #define SERVER_IP "192.168.6.1"   // Change this to the ip address of the server
 #define CLIENT_IP "192.168.6.2"
 #define SERVER_PORT 8889
-#define NUM_CORES 1000
+#define NUM_CORES 10
 #define TABLE_SIZE  10000
 
 // Commands to serialize
@@ -81,7 +81,7 @@ void *send_message(void* arg) {
 
     // Loop to send many SET messages
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < 1000000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(SET, key, "hello", buffer);
