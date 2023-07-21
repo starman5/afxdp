@@ -125,10 +125,6 @@ int main() {
     }
 
     pthread_t workers[NUM_CORES];
-    
-    // start timer
-    struct timespec start_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     // Start worker threads
     for (int i = 0; i < NUM_CORES; ++i) {
@@ -139,10 +135,19 @@ int main() {
         }    
     }
 
+    // start timer
+    struct timespec start_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+
     // Wait for all threads to finish
     for (int i = 0; i < NUM_CORES; ++i) {
         pthread_join(workers[i], NULL);
     }
+
+    // end timer
+    struct timespec end_time;
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // send END message
     uint64_t key = rand();
@@ -165,10 +170,6 @@ int main() {
 
     // Close socket
     close(sockfd);
-
-    // end timer
-    struct timespec end_time;
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // Get total time
     struct timespec total_time;
