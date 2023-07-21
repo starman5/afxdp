@@ -26,7 +26,7 @@ UDP client, meant to stress the server, designed to measure throughput
 #define DEL     8
 #define END     9
 
-#define BUFFER_SZ  1000 
+#define BUFFER_SZ  64 
 
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
