@@ -94,7 +94,7 @@ void *send_message(void* arg) {
 
         memset(buffer, '\0', BUFFER_SZ);
         int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
-        //printf("%s\n", buffer);
+        printf("%s\n", buffer);
 
     }
 
