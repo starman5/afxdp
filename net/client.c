@@ -26,7 +26,7 @@ UDP client, meant to stress the server, designed to measure throughput
 #define DEL     8
 #define END     9
 
-#define BUFFER_SZ  1024 
+#define BUFFER_SZ  64 
 
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
@@ -81,7 +81,7 @@ void *send_message(void* arg) {
 
     // Loop to send many SET messages
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 100; ++i) {
+    for (int i = 0; i < 10000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(SET, key, "hello", buffer);
@@ -94,11 +94,11 @@ void *send_message(void* arg) {
 
         memset(buffer, '\0', BUFFER_SZ);
         int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
+        //printf("%s\n", buffer);
 
     }
 
     close(sockfd);
-    printf("exiting %d\n", core_id);
     pthread_exit(NULL);
 }
 
@@ -125,6 +125,10 @@ int main() {
     }
 
     pthread_t workers[NUM_CORES];
+    
+    // start timer
+    struct timespec start_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     // Start worker threads
     for (int i = 0; i < NUM_CORES; ++i) {
@@ -135,21 +139,10 @@ int main() {
         }    
     }
 
-    // start timer
-    struct timespec start_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-
     // Wait for all threads to finish
     for (int i = 0; i < NUM_CORES; ++i) {
         pthread_join(workers[i], NULL);
     }
-
-    printf("threads finished\n");
-
-    // end timer
-    struct timespec end_time;
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // send END message
     uint64_t key = rand();
@@ -172,6 +165,10 @@ int main() {
 
     // Close socket
     close(sockfd);
+
+    // end timer
+    struct timespec end_time;
+    clock_gettime(CLOCK_MONOTONIC, &end_time);
 
     // Get total time
     struct timespec total_time;
