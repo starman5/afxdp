@@ -145,6 +145,8 @@ int main() {
         pthread_join(workers[i], NULL);
     }
 
+    printf("threads finished\n");
+
     // end timer
     struct timespec end_time;
     clock_gettime(CLOCK_MONOTONIC, &end_time);
