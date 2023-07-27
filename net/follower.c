@@ -17,7 +17,6 @@ UDP client, meant to stress the server, designed to measure latency
 // Change these to reflect the actual topology
 #define SERVER_IP "192.168.6.1"
 #define LEADER_IP  "192.168.6.2"
-#define CLIENT_IP   "192.168.6.3"
 
 #define SERVER_PORT 8889
 #define COMM_PORT   8890
@@ -32,8 +31,6 @@ UDP client, meant to stress the server, designed to measure latency
 #define END     9
 
 #define BUFFER_SZ  1000 
-
-int NUM_CORES = 0;
 
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
@@ -75,7 +72,7 @@ void *send_message(void* arg) {
      // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, CLIENT_IP, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, follower_ip, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
@@ -133,12 +130,13 @@ void *send_message(void* arg) {
 
 int main(int argc, char* argv[]) {
     // Process command-line arguments
-    if (argc < 2) {
-        printf("no command line arguments provided\n");
+    if (argc < 3) {
+        printf("insufficient command line arguments provided\n");
         return 0;
     }
 
-    NUM_CORES = atoi(argv[1]);
+    int num_cores = atoi(argv[1]);
+    const char* follower_ip = argv[2];
 
     // Set up socket for the main thread
     int sockfd;
@@ -163,11 +161,10 @@ int main(int argc, char* argv[]) {
     // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, CLIENT_IP, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, follower_ip, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
-
     // Bind socket to source_addr
     if (bind(sockfd, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
         perror("Binding socket failed\n");
@@ -190,7 +187,6 @@ int main(int argc, char* argv[]) {
     my_addr.sin_family = AF_INET;
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     my_addr.sin_port = htons(COMM_PORT);
-
     // Bind socket to the specified address and port
     if (bind(sockfd_leader, (struct sockaddr*)&my_addr, sizeof(my_addr)) < 0) {
         perror("Bind failed");
@@ -217,10 +213,10 @@ int main(int argc, char* argv[]) {
     sprintf(time_buffer, "%f", start_seconds);
     int bytes_sent = sendto(sockfd_leader, time_buffer, strlen(time_buffer), 0, (struct sockaddr*)&l_addr, addr_len);
 
-    pthread_t workers[NUM_CORES];
+    pthread_t workers[num_cores];
 
     // Start worker threads
-    for (int i = 0; i < NUM_CORES; ++i) {
+    for (int i = 0; i < num_cores; ++i) {
         int core = i;
         if (pthread_create(&workers[i], NULL, send_message, (void*)&core) != 0) {
             perror("Thread creation failed");
@@ -229,7 +225,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Wait for all threads to finish
-    for (int i = 0; i < NUM_CORES; ++i) {
+    for (int i = 0; i < num_cores; ++i) {
         pthread_join(workers[i], NULL);
     }
 

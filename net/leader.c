@@ -18,9 +18,7 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 
 // Change these to reflect the actual topology
 #define SERVER_IP "192.168.6.1"
-#define FOLLOWER_IP "192.168.6.3"
-#define CLIENT_IP   "192.168.6.2"
-#define NUM_FOLLOWERS   1
+#define LEADER_IP   "192.168.6.2"
 
 #define SERVER_PORT 8889
 #define COMM_PORT   8890
@@ -37,8 +35,6 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 
 #define BUFFER_SZ  1000 
 
-int NUM_CORES = 0;
-
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
     int pos = 0;
@@ -53,6 +49,59 @@ void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
     ++pos;
 
     strcpy(&buffer[pos], value);
+}
+
+void start_follower(const char* ip_addr) {
+    // Set up socket for communication with follower
+    int sockfd_follower;
+    struct sockaddr_in follower_addr, source_addr;
+
+    // Create socket
+    if ((sockfd_follower = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure follower address
+    memset(&follower_addr, 0, sizeof(follower_addr));
+    follower_addr.sin_family = AF_INET;
+    follower_addr.sin_port = htons(COMM_PORT);     
+    if (inet_pton(AF_INET, ip_addr, &follower_addr.sin_addr) <= 0) {
+        perror("Invalid address");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure source address
+    memset(&source_addr, 0, sizeof(source_addr));
+    source_addr.sin_family = AF_INET;
+    if (inet_pton(AF_INET, LEADER_IP, &source_addr.sin_addr) <= 0) {
+        perror("Invalid address");
+        exit(EXIT_FAILURE);
+    }
+    // Bind socket to source_addr
+    if (bind(sockfd, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
+        perror("Binding socket failed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    // Send START requests to follower
+    uint64_t key = rand();  // Key doesn't matter
+    memset(buffer, '\0', BUFFER_SZ);
+    serialize(START, key, "hello", buffer);
+    printf("Starting Follower\n");
+    int bytes_sent = sendto(sockfd_follower, buffer, strlen(buffer), MSG_WAITALL, (struct sockaddr*)&follower_addr, (socklen_t)sizeof(follower_addr));
+    if (bytes_sent < 0) {
+        perror("Sendto failed");
+        exit(EXIT_FAILURE);
+    }
+    memset(buffer, '\0', BUFFER_SZ);
+    printf("Waiting for response from Follower\n");
+    int bytes_received = recvfrom(sockfd_follower, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&follower_addr, &addr_len);
+    printf("Received response from Follower\n");
+    char* endptr;
+    double start_seconds = strtod(buffer, &endptr);
+
+    close(sockfd_follower);
 }
 
 void *send_message(void* arg) {
@@ -79,7 +128,7 @@ void *send_message(void* arg) {
      // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, CLIENT_IP, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, LEADER_IP, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
@@ -136,12 +185,18 @@ void *send_message(void* arg) {
 
 int main(int argc, char* argv[]) {
     // Process command line arguments
-    if (argc < 2) {
-        printf("No arguments provided\n");
-        return 0;
+    //  NUM_FOLLOWERS
+    //  NUM_CORES per FOLLOWER
+    //  FOLLOWER_1 IP
+    //  ...
+    //  FOLLOWER_N IP
+
+    size_t num_followers = atoi(argv[1]);
+    size_t num_cores = atoi(argv[2]);
+    const char* followers[num_followers];
+    for (size_t i = 0; i < num_followers; ++i) {
+        followers[i] = argv[3 + i];
     }
-    NUM_CORES = atoi(argv[1]);
-    //int follower_cores = atoi(argv[2]);
 
     // Set up socket for the main thread
     int sockfd;
@@ -166,11 +221,10 @@ int main(int argc, char* argv[]) {
     // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, CLIENT_IP, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, LEADER_IP, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
-
     // Bind socket to source_addr
     if (bind(sockfd, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
         perror("Binding socket failed\n");
@@ -194,50 +248,23 @@ int main(int argc, char* argv[]) {
         int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
     }
 
-    // Set up socket for communication with follower
-    int sockfd_follower;
-    struct sockaddr_in follower_addr;
-
-    // Create socket
-    if ((sockfd_follower = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-        perror("Socket creation failed");
-        exit(EXIT_FAILURE);
+    pthread_t follower_threads[num_followers];
+    for (size_t i = 0; i < num_followers; ++i) {
+        if (pthread_create(&follower_threads[i], NULL, start_follower, (void*)(followers[i])) != 0) {
+            perror("Thread creation failed\n");
+            exit(EXIT_FAILURE);
+        }
+    }
+    // Wait for all follower_threads to be started
+    for (size_t i = 0; i < num_followers; ++i) {
+        pthread_join(follower_threads[i], NULL);
     }
 
-    // Configure follower address
-    memset(&follower_addr, 0, sizeof(follower_addr));
-    follower_addr.sin_family = AF_INET;
-    follower_addr.sin_port = htons(COMM_PORT);
-        
-    if (inet_pton(AF_INET, FOLLOWER_IP, &follower_addr.sin_addr) <= 0) {
-        perror("Invalid address");
-        exit(EXIT_FAILURE);
-    }
+    // Now that all followers have been notified to send requests to server, so does the leader
 
-    // Send START requests to follower
-    uint64_t key = rand();  // Key doesn't matter
-    memset(buffer, '\0', BUFFER_SZ);
-    serialize(START, key, "hello", buffer);
-    printf("Starting Follower\n");
-    int bytes_sent = sendto(sockfd_follower, buffer, strlen(buffer), MSG_WAITALL, (struct sockaddr*)&follower_addr, (socklen_t)sizeof(follower_addr));
-    if (bytes_sent < 0) {
-        perror("Sendto failed");
-        exit(EXIT_FAILURE);
-    }
-    memset(buffer, '\0', BUFFER_SZ);
-    printf("Waiting for response from Follower\n");
-    int bytes_received = recvfrom(sockfd_follower, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&follower_addr, &addr_len);
-    printf("Received response from Follower\n");
-    char* endptr;
-    double start_seconds = strtod(buffer, &endptr);
-
-    close(sockfd_follower);
-    // Now that follower has been notified to send requests to server, so does the leader
-
-    pthread_t workers[NUM_CORES];
-
+    pthread_t workers[num_cores];
     // Start worker threads
-    for (int i = 0; i < NUM_CORES; ++i) {
+    for (int i = 0; i < num_cores; ++i) {
         int core = i;
         if (pthread_create(&workers[i], NULL, send_message, (void*)&core) != 0) {
             perror("Thread creation failed");
@@ -246,7 +273,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Wait for all threads to finish
-    for (int i = 0; i < NUM_CORES; ++i) {
+    for (int i = 0; i < num_cores; ++i) {
         pthread_join(workers[i], NULL);
     }
 
