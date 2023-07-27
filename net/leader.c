@@ -85,7 +85,7 @@ void start_follower(const char* ip_addr) {
         exit(EXIT_FAILURE);
     }
 
-    char buffer[BUFFER_SZ]
+    char buffer[BUFFER_SZ];
     // Send START requests to follower
     uint64_t key = rand();  // Key doesn't matter
     memset(buffer, '\0', BUFFER_SZ);
