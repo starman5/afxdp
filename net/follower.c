@@ -163,7 +163,7 @@ int main(int argc, char* argv[]) {
     // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, FOLLOWEr_IP, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, FOLLOWER_IP, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
