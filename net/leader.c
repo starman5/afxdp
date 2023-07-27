@@ -98,8 +98,6 @@ void start_follower(const char* ip_addr) {
     printf("Waiting for response from Follower\n");
     int bytes_received = recvfrom(sockfd_follower, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&follower_addr, &addr_len);
     printf("Received response from Follower\n");
-    char* endptr;
-    double start_seconds = strtod(buffer, &endptr);
 
     close(sockfd_follower);
 }
@@ -261,6 +259,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Now that all followers have been notified to send requests to server, so does the leader
+    // start timer
+    struct timespec start_time;
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
 
     pthread_t workers[num_cores];
     // Start worker threads
@@ -278,19 +279,20 @@ int main(int argc, char* argv[]) {
     }
 
     // send END message
-    key = rand();
+    uint64_t key = rand();
     //char buffer[BUFFER_SZ];
     memset(buffer, '\0', BUFFER_SZ);
     serialize(END, key, "hello", buffer);
-    bytes_sent = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    int bytes_sent = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
     if (bytes_sent < 0) {
         perror("Sendto failed");
         exit(EXIT_FAILURE);
     }
 
     // receive final response
+    char* endptr;
     memset(buffer, '\0', BUFFER_SZ);
-    bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
+    int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
     double total_requests = strtol(buffer, &endptr, 10);
     printf("Processed Requests: %f\n", total_requests);
 
