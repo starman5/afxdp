@@ -262,6 +262,7 @@ int main(int argc, char* argv[]) {
     // start timer
     struct timespec start_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
+    double start_seconds = start_time.tv_sec + ((double)start_time.tv_nsec / 1000000000);
 
     pthread_t workers[num_cores];
     // Start worker threads
