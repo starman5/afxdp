@@ -55,6 +55,7 @@ void start_follower(const char* ip_addr) {
     // Set up socket for communication with follower
     int sockfd_follower;
     struct sockaddr_in follower_addr, source_addr;
+    socklen_t addr_len = sizeof(follower_addr);
 
     // Create socket
     if ((sockfd_follower = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -79,11 +80,12 @@ void start_follower(const char* ip_addr) {
         exit(EXIT_FAILURE);
     }
     // Bind socket to source_addr
-    if (bind(sockfd, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
+    if (bind(sockfd_follower, (struct sockaddr*)&source_addr, sizeof(source_addr)) < 0) {
         perror("Binding socket failed\n");
         exit(EXIT_FAILURE);
     }
 
+    char buffer[BUFFER_SZ]
     // Send START requests to follower
     uint64_t key = rand();  // Key doesn't matter
     memset(buffer, '\0', BUFFER_SZ);
