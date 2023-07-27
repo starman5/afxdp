@@ -32,7 +32,7 @@ UDP client, meant to stress the server, designed to measure latency
 
 #define BUFFER_SZ  1000 
 
-const char* FOLLOWER_IP
+const char* FOLLOWER_IP;
 
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
