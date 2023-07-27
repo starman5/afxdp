@@ -51,7 +51,8 @@ void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
     strcpy(&buffer[pos], value);
 }
 
-void start_follower(const char* ip_addr) {
+void start_follower(void* ip) {
+    const char* ip_addr = (const char*)ip;
     // Set up socket for communication with follower
     int sockfd_follower;
     struct sockaddr_in follower_addr, source_addr;
@@ -165,7 +166,7 @@ void *send_message(void* arg) {
 
         // Perform latency calculation
         // Get total time
-        struct timespec total_time;
+        /*struct timespec total_time;
         if (end_time.tv_nsec - start_time.tv_nsec < 0) {
             total_time.tv_sec = end_time.tv_sec - start_time.tv_sec - 1;
             total_time.tv_nsec = 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
@@ -174,11 +175,11 @@ void *send_message(void* arg) {
             total_time.tv_nsec = end_time.tv_nsec - start_time.tv_nsec;
         }
         double latency = total_time.tv_sec + ((double)total_time.tv_nsec / 1000000000);
-        total_latency += latency;
+        total_latency += latency;*/
     }
 
-    double average_latency = total_latency / MSG_PER_CORE;
-    printf("%f\n", average_latency);
+    /*double average_latency = total_latency / MSG_PER_CORE;
+    printf("%f\n", average_latency);*/
     close(sockfd);
     pthread_exit(NULL);
 }
