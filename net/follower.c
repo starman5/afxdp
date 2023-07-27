@@ -32,6 +32,8 @@ UDP client, meant to stress the server, designed to measure latency
 
 #define BUFFER_SZ  1000 
 
+const char* FOLLOWER_IP
+
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {
     int pos = 0;
@@ -72,7 +74,7 @@ void *send_message(void* arg) {
      // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, follower_ip, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, FOLLOWER_IP, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
@@ -136,7 +138,7 @@ int main(int argc, char* argv[]) {
     }
 
     int num_cores = atoi(argv[1]);
-    const char* follower_ip = argv[2];
+    FOLLOWER_IP = argv[2];
 
     // Set up socket for the main thread
     int sockfd;
@@ -161,7 +163,7 @@ int main(int argc, char* argv[]) {
     // Configure source address
     memset(&source_addr, 0, sizeof(source_addr));
     source_addr.sin_family = AF_INET;
-    if (inet_pton(AF_INET, follower_ip, &source_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, FOLLOWEr_IP, &source_addr.sin_addr) <= 0) {
         perror("Invalid address");
         exit(EXIT_FAILURE);
     }
