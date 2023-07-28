@@ -61,6 +61,8 @@
 #define DEL     8 
 #define END     9
 
+static void exit_application(int signal);
+
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
@@ -685,7 +687,7 @@ static void rx_and_process(void* args)
 
 				if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
 					printf("timeout\n");
-					exit_application();
+					exit_application(SIGKILL);
 					//xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
 					//xsk->outstanding_tx += num_tx_packets;
 					//num_tx_packets = 0;
