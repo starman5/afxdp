@@ -679,8 +679,8 @@ static void rx_and_process(void* args)
 				if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
 					timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
 				} else {
-					timeout_elapsed_time.tv_sec--;
-					timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
+					timeout_elapsed.tv_sec--;
+					timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
 				}
 
 				if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
