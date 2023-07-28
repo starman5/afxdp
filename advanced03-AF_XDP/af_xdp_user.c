@@ -570,12 +570,12 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	//++num_tx_packets;
-	//if (num_tx_packets >= TX_BATCH_SIZE) {
-		xsk_ring_prod__submit(&xsk->tx, 1);
-		xsk->outstanding_tx += 1;
-		//num_tx_packets = 0;
-	//}
+	++num_tx_packets;
+	if (num_tx_packets >= TX_BATCH_SIZE) {
+		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+		xsk->outstanding_tx += num_tx_packets;
+		num_tx_packets = 0;
+	}
 
 	xsk->stats.tx_bytes += len;
 	xsk->stats.tx_packets++;
@@ -673,6 +673,25 @@ static void rx_and_process(void* args)
 		}
 		else {
 			handle_receive_packets(th_args);
+			if (num_tx_packets > 0) {
+				clock_gettime(CLOCK_MONOTONIC, &timeout_end);
+				timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
+				if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
+					timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
+				} else {
+					timeout_elapsed_time.tv_sec--;
+					timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec - start_time.tv_nsec;
+				}
+
+				if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
+					printf("timeout\n");
+					exit_application();
+					//xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+					//xsk->outstanding_tx += num_tx_packets;
+					//num_tx_packets = 0;
+					//complete_tx(xsk);
+				}
+			}
 		}
 		// Check timeout
 		/*if (num_tx_packets > 0) {
