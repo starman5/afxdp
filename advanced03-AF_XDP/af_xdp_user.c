@@ -555,7 +555,10 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	uint16_t tmp = udph->source;
 	udph->source = udph->dest;
 	udph->dest = tmp;
-		
+	
+	char buffer[60] = {'H', 'e', 'l', 'l', 'l', 'o', 0};
+	char* payload_data = (char*)(udp_packet + 1);
+	memcpy(payload_data, buffer);
 
 	/* Here we sent the packet out of the receive port. Note that
 	 * we allocate one entry and schedule it. Your design would be
