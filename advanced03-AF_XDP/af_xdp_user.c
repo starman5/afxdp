@@ -556,10 +556,10 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	udph->source = udph->dest;
 	udph->dest = tmp;
 	
-	char new_payload[4] = "aaaa";
+	/char new_payload[4] = "aaaa";
 	unsigned char* payload_data = (unsigned char*)(udph) + sizeof(struct udphdr);
 	printf("payload: %s\n", payload_data);
-	memcpy(payload_data, new_payload, 4);
+	/*memcpy(payload_data, new_payload, 4);*/
 	printf("new payload: %s\n", payload_data);
 
 	/* Here we sent the packet out of the receive port. Note that
