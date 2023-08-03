@@ -247,6 +247,7 @@ int main(int argc, char* argv[]) {
         }
         memset(buffer, '\0', BUFFER_SZ);
         int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL, (struct sockaddr*)&server_addr, &addr_len);
+        printf("buffer: %s\n", buffer);
     }
 
     pthread_t follower_threads[num_followers];

@@ -556,7 +556,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	udph->source = udph->dest;
 	udph->dest = tmp;
 	
-	char new_payload[60] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+	char new_payload[1] = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 	unsigned char* payload_data = (unsigned char*)(udph) + sizeof(struct udphdr);
 	printf("payload: %s\n", payload_data);
 	memcpy(payload_data, new_payload, 60);
