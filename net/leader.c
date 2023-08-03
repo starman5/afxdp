@@ -33,7 +33,7 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 #define END     9
 #define START   10
 
-#define BUFFER_SZ  1000 
+#define BUFFER_SZ  70 
 
 // Serialize message into format recognized by the server
 void serialize(uint64_t comm, uint64_t key, char* value, char* buffer) {

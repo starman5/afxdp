@@ -30,7 +30,7 @@ UDP client, meant to stress the server, designed to measure latency
 #define DEL     8
 #define END     9
 
-#define BUFFER_SZ  1000 
+#define BUFFER_SZ  70 
 
 const char* FOLLOWER_IP;
 
