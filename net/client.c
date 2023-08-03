@@ -13,8 +13,8 @@ UDP client, meant to stress the server, designed to measure throughput
 #include <sys/sysinfo.h>
 #include <sched.h>
 
-#define SERVER_IP "192.168.6.1"   // Change this to the ip address of the server
-#define CLIENT_IP "192.168.6.2"
+#define SERVER_IP "10.10.2.1"   // Change this to the ip address of the server
+#define CLIENT_IP "10.10.2.2"
 #define SERVER_PORT 8889
 #define NUM_CORES 1000
 #define TABLE_SIZE  10000
