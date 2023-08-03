@@ -251,7 +251,7 @@ void* handle_request(void* arg) {
                 break;
 
             case GET:
-                countArr[core_id].count += 1;
+                //countArr[core_id].count += 1;
                 char* val = table_get(hashtable, key, locks);
                 if (val && val[0] == '*') {    // Prevent compiler optimization
                     printf("star\n");
@@ -284,7 +284,7 @@ void* handle_request(void* arg) {
                 special_message = "Command Not Found";
         }
         
-        //countArr[core_id].count += 1;
+        countArr[core_id].count += 1;
 
         ssize_t bytes_sent;
         if (special_message) {
