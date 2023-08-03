@@ -235,7 +235,7 @@ int main(int argc, char* argv[]) {
     printf("Filling up Key-Value Store\n");
     // Send SET requests to fill up key-value store
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 2000000; ++i) {
+    for (int i = 0; i < 1000000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(SET, key, "hello", buffer);
