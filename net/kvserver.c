@@ -17,7 +17,7 @@
 
 #define MAX_BUFFER_SIZE 1024
 #define SERVER_PORT 8889
-#define NUM_CORES   10
+#define NUM_CORES   1
 #define TABLE_SIZE  10000
 #define CACHE_LINE_SIZE 64
 
