@@ -16,7 +16,7 @@ UDP client, meant to stress the server, designed to measure throughput
 #define SERVER_IP "10.10.2.1"   // Change this to the ip address of the server
 #define CLIENT_IP "10.10.2.2"
 #define SERVER_PORT 8889
-#define NUM_CORES 100
+#define NUM_CORES 10000
 #define TABLE_SIZE  10000
 
 // Commands to serialize
