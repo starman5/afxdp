@@ -42,7 +42,7 @@
 #define INVALID_UMEM_FRAME UINT64_MAX
 #define NUM_SOCKETS		   1
 #define NUM_THREADS		   NUM_SOCKETS
-#define TIMEOUT_NSEC	   5000000000
+#define TIMEOUT_NSEC	   500000000
 #define CACHE_LINE_SIZE	   64
 
 #define MAX_PACKET_LEN	XSK_UMEM__DEFAULT_FRAME_SIZE
@@ -60,8 +60,6 @@
 #define GET     7
 #define DEL     8 
 #define END     9
-
-static void exit_application(int signal);
 
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
@@ -572,12 +570,12 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
 	xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
 
-	++num_tx_packets;
-	if (num_tx_packets >= TX_BATCH_SIZE) {
-		xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-		xsk->outstanding_tx += num_tx_packets;
-		num_tx_packets = 0;
-	}
+	//++num_tx_packets;
+	//if (num_tx_packets >= TX_BATCH_SIZE) {
+		xsk_ring_prod__submit(&xsk->tx, 1);
+		xsk->outstanding_tx += 1;
+		//num_tx_packets = 0;
+	//}
 
 	xsk->stats.tx_bytes += len;
 	xsk->stats.tx_packets++;
@@ -675,25 +673,6 @@ static void rx_and_process(void* args)
 		}
 		else {
 			handle_receive_packets(th_args);
-			if (num_tx_packets > 0) {
-				clock_gettime(CLOCK_MONOTONIC, &timeout_end);
-				timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
-				if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
-					timeout_elapsed.tv_nsec = timeout_end.tv_nsec - timeout_start.tv_nsec;
-				} else {
-					timeout_elapsed.tv_sec--;
-					timeout_elapsed.tv_nsec = 1000000000 + timeout_end.tv_nsec - timeout_start.tv_nsec;
-				}
-
-				if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
-					printf("timeout\n");
-					exit_application(SIGKILL);
-					//xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-					//xsk->outstanding_tx += num_tx_packets;
-					//num_tx_packets = 0;
-					//complete_tx(xsk);
-				}
-			}
 		}
 		// Check timeout
 		/*if (num_tx_packets > 0) {
