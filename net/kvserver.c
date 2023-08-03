@@ -251,6 +251,7 @@ void* handle_request(void* arg) {
                 break;
 
             case GET:
+                ;
                 //countArr[core_id].count += 1;
                 char* val = table_get(hashtable, key, locks);
                 if (val && val[0] == '*') {    // Prevent compiler optimization
