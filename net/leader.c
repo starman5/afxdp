@@ -22,7 +22,7 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 
 #define SERVER_PORT 8889
 #define COMM_PORT   8890
-#define TABLE_SIZE  10000
+#define TABLE_SIZE  1000000
 #define MSG_PER_CORE    500000
 
 // Commands to serialize
@@ -235,7 +235,7 @@ int main(int argc, char* argv[]) {
     printf("Filling up Key-Value Store\n");
     // Send SET requests to fill up key-value store
     char buffer[BUFFER_SZ];
-    for (int i = 0; i < 10000; ++i) {
+    for (int i = 0; i < 2000000; ++i) {
         uint64_t key = rand();  // random key.  This is probably ideal for minimizing hash collisions
         memset(buffer, '\0', BUFFER_SZ);
         serialize(SET, key, "hello", buffer);

@@ -53,7 +53,7 @@
 #define SRC_PORT	8889
 #define DST_PORT	8889
 #define MAX_BUFFER_SIZE 60
-#define TABLE_SIZE  10000
+#define TABLE_SIZE  1000000
 
 #define NON     5
 #define SET     6
