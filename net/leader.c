@@ -23,7 +23,7 @@ telling them begin sending GET requests, and then itself begins sending GET requ
 #define SERVER_PORT 8889
 #define COMM_PORT   8890
 #define TABLE_SIZE  10000
-#define MSG_PER_CORE    100000
+#define MSG_PER_CORE    500000
 
 // Commands to serialize
 #define NON     5
