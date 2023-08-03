@@ -561,6 +561,7 @@ static bool process_packet(struct xsk_socket_info *xsk,
 	printf("payload: %s\n", payload_data);
 	memcpy((payload_data + 1), new_payload, 4);
 	printf("new payload: %s\n", payload_data);
+	udph->check = 0;
 
 	/* Here we sent the packet out of the receive port. Note that
 	 * we allocate one entry and schedule it. Your design would be
