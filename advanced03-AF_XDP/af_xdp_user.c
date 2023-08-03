@@ -340,6 +340,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	int i;
 	int ret;
 	uint32_t prog_id;
+	int queue_id = 20;
 
 	xsk_info = calloc(1, sizeof(*xsk_info));
 	if (!xsk_info)
@@ -352,7 +353,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	xsk_cfg.bind_flags = cfg->xsk_bind_flags;
 	xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD: 0;
 	ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname,
-				 queue, umem->umem, &xsk_info->rx,
+				 queue_id, umem->umem, &xsk_info->rx,
 				 &xsk_info->tx, &umem->fq, &umem->cq, &xsk_cfg);
 	if (ret)
 		goto error_exit;
