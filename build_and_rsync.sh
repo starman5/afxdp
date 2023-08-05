@@ -20,6 +20,14 @@ wait
 # Then start leader: ./leader [num_followers] [num leader threads] [follower ip 1] [follower ip 2] ... [follower ip n]
 
 
+sudo systemctl stop irqbalance
+
+(let CPU=0; cd /sys/class/net/ens1f1np1/device/msi_irqs/;
+  for IRQ in *; do
+    echo $CPU | sudo tee /proc/irq/$IRQ/smp_affinity_list
+    # let CPU=$(((CPU+1)%ncpu))
+done)
+
 # ./leader 3 40 192.168.6.3 192.168.6.4 192.168.6.5
 # ./follower 40 192.168.6.3
 # ./follower 40 192.168.6.4

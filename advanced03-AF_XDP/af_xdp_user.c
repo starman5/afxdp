@@ -449,7 +449,7 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 
   // Get the value
   memcpy(value, &buffer[16], 64);
-  char* value_get;
+  char* value_get = NULL;
 
   // Process message from the client
   switch (comm) {
@@ -516,13 +516,11 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   udph->source = udph->dest;
   udph->dest = tmp;
 
-  char new_payload[64] =
-      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   unsigned char* payload_data = (unsigned char*)(udph) + sizeof(struct udphdr);
   if (special_message) {
     memcpy(payload_data, special_message, strlen(special_message));
-  } else {
-    memcpy(payload_data, new_payload, 64);
+  } else if (value_get) {
+    memcpy(payload_data, value_get, 64);
   }
   udph->check = 0;
 
