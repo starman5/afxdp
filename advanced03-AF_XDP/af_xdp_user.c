@@ -449,43 +449,51 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 
   // Get the value
   memcpy(value, &buffer[16], 64);
+  char* value_get;
 
   // Process message from the client
   switch (comm) {
     case NON:
       break;
-    case SET:
-      table_set(hashtable, key, value, locks);
-      break;
 
-    case GET:;
-      char* val = table_get(hashtable, key, locks);
-      if (val && val[0] == '*') {  // Prevent compiler optimization
+    case SET: {
+      table_set(hashtable, key, value, locks);
+      countAr[idx].count = 0;
+      break;
+    }
+
+    case GET: {
+      value_get = table_get(hashtable, key, locks);
+      if (value_get && value_get[0] == '*') {  // Prevent compiler optimization
         printf("star\n");
       }
+      countAr[idx].count += 1;
       break;
+    }
 
-    case DEL:
+    case DEL: {
       table_delete(hashtable, key, locks);
       break;
+    }
 
-    case END:;
+    case END: {
       uint64_t total_count = 0;
       for (int i = 0; i < NUM_SOCKETS; ++i) {
+        // @yangzhou, thread-safety issues
         total_count += countAr[i].count;
         printf("thread %d: %ld\n", i, countAr[i].count);
       }
       // Get the total number of processed requests and send back to user
-      char end_message[15];
-      sprintf(end_message, "%ld", total_count);
+      char* end_message = malloc(15);
+      *(uint64_t*)end_message = total_count;
+      end_message[sizeof(uint64_t)] = '\0';
       special_message = end_message;
       break;
+    }
 
     default:
       special_message = "Command Not Found";
   }
-
-  countAr[idx].count += 1;
 
   if (ntohs(eth->h_proto) != ETH_P_IP) return false;
 
@@ -508,10 +516,14 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   udph->source = udph->dest;
   udph->dest = tmp;
 
-  char new_payload[60] =
-      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  char new_payload[64] =
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
   unsigned char* payload_data = (unsigned char*)(udph) + sizeof(struct udphdr);
-  memcpy(payload_data, new_payload, 60);
+  if (special_message) {
+    memcpy(payload_data, special_message, strlen(special_message));
+  } else {
+    memcpy(payload_data, new_payload, 64);
+  }
   udph->check = 0;
 
   /* Here we sent the packet out of the receive port. Note that

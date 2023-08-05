@@ -7,15 +7,17 @@ begins sending GET requests
 
 #define _GNU_SOURCE
 
+extern "C" {
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <sched.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/sysinfo.h>
 #include <unistd.h>
+}
+#include "common.h"
 
 // Change these to reflect the actual topology
 #define SERVER_IP "192.168.6.1"
@@ -36,21 +38,7 @@ begins sending GET requests
 
 #define BUFFER_SZ 1500
 
-// Serialize message into format recognized by the server
-int serialize(uint64_t comm, uint64_t key, int val_len, char* buffer) {
-  int pos = 0;
-  memcpy(buffer, (void*)&comm, 8);
-  pos += 8;
-
-  memcpy(buffer + pos, (void*)&key, 8);
-  pos += 8;
-
-  pos += val_len;
-
-  return pos;
-}
-
-void start_follower(void* ip) {
+void* start_follower(void* ip) {
   const char* ip_addr = (const char*)ip;
   // Set up socket for communication with follower
   int sockfd_follower;
@@ -88,7 +76,7 @@ void start_follower(void* ip) {
 
   char buffer[BUFFER_SZ];
   // Send START requests to follower
-  uint64_t key = rand() % 1000000;  // Key doesn't matter
+  uint64_t key = IntRand(0, 1000000 - 1);  // Key doesn't matter
   int buf_len = serialize(START, key, 64, buffer);
   printf("Starting Follower\n");
   int bytes_sent = sendto(sockfd_follower, buffer, buf_len, MSG_WAITALL,
@@ -104,6 +92,8 @@ void start_follower(void* ip) {
   printf("Received response from Follower\n");
 
   close(sockfd_follower);
+
+  return nullptr;
 }
 
 void* send_message(void* arg) {
@@ -145,8 +135,9 @@ void* send_message(void* arg) {
   double total_latency = 0;
   char buffer[BUFFER_SZ];
   for (int i = 0; i < MSG_PER_CORE; ++i) {
-    uint64_t key = rand() % 1000000;  // random key.  This is probably ideal for
-                                      // minimizing hash collisions
+    uint64_t key =
+        IntRand(0, 1000000 - 1);  // random key.  This is probably ideal for
+                                  // minimizing hash collisions
     int buf_len = serialize(GET, key, 64, buffer);
     ssize_t bytes_sent;
 
@@ -239,8 +230,9 @@ int main(int argc, char* argv[]) {
   // Send SET requests to fill up key-value store
   char buffer[BUFFER_SZ];
   for (int i = 0; i < 1000000; ++i) {
-    uint64_t key = rand() % 1000000;  // random key.  This is probably ideal for
-                                      // minimizing hash collisions
+    uint64_t key =
+        IntRand(0, 1000000 - 1);  // random key.  This is probably ideal for
+                                  // minimizing hash collisions
     int buf_len = serialize(SET, key, 64, buffer);
     ssize_t bytes_sent;
     bytes_sent =
@@ -267,6 +259,7 @@ int main(int argc, char* argv[]) {
     pthread_join(follower_threads[i], NULL);
   }
 
+  printf("Starting Benchmarking\n");
   // Now that all followers have been notified to send requests to server, so
   // does the leader start timer
   struct timespec start_time;
@@ -289,8 +282,9 @@ int main(int argc, char* argv[]) {
     pthread_join(workers[i], NULL);
   }
 
+  printf("Finishing Benchmarking\n");
   // send END message
-  uint64_t key = rand() % 1000000;
+  uint64_t key = IntRand(0, 1000000 - 1);
   int buf_len = serialize(END, key, 64, buffer);
   int bytes_sent = sendto(sockfd, buffer, buf_len, 0,
                           (struct sockaddr*)&server_addr, sizeof(server_addr));
@@ -300,11 +294,10 @@ int main(int argc, char* argv[]) {
   }
 
   // receive final response
-  char* endptr;
   int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL,
                                 (struct sockaddr*)&server_addr, &addr_len);
-  double total_requests = strtol(buffer, &endptr, 10);
-  printf("Processed Requests: %f\n", total_requests);
+  uint64_t total_requests = *(uint64_t*)buffer;
+  printf("Processed Requests: %ld\n", total_requests);
 
   // Close socket
   close(sockfd);
@@ -317,8 +310,8 @@ int main(int argc, char* argv[]) {
 
   double total_seconds = end_seconds - start_seconds;
   // double total_requests = (NUM_CORES + follower_cores) * MSG_PER_CORE;
-  double throughput = total_requests / total_seconds;
-  printf("Throughput: %f\n", throughput);
+  double throughput = total_requests / 1e6 / total_seconds;
+  printf("Throughput (mops): %f\n", throughput);
   printf("Seconds: %f\n", total_seconds);
   return 0;
 }

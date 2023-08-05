@@ -1,4 +1,5 @@
 CC = gcc
+CXX = g++
 CFLAGS = -O3 -Wall -Wextra -pthread
 
 all: server client tiny_client tinier_client pause_client kvserver leader follower
@@ -22,10 +23,10 @@ kvserver:
 	$(CC) $(CFLAGS) -o kvserver kvserver.c
 
 leader:
-	$(CC) $(CFLAGS) -o leader leader.c
+	$(CXX) $(CFLAGS) -o leader leader.cc
 
 follower:
-	$(CC) $(CFLAGS) -o follower follower.c
+	$(CXX) $(CFLAGS) -o follower follower.cc
 
 clean:
 	rm -rf server client tiny_client tinier_client pause_client kvserver leader follower
