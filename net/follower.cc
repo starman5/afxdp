@@ -23,7 +23,7 @@ extern "C" {
 #define SERVER_PORT 8889
 #define COMM_PORT 8890
 #define MSG_PER_CORE 500000
-#define TABLE_SIZE 1000000
+#define KEY_SPACE_SIZE 1000000
 
 // Commands to serialize
 #define NON 5
@@ -76,9 +76,9 @@ void* send_message(void* arg) {
   char buffer[BUFFER_SZ];
   for (int i = 0; i < MSG_PER_CORE; ++i) {
     uint64_t key =
-        IntRand(0, 1000000 - 1);  // random key.  This is probably ideal for
-                                  // minimizing hash collisions
-    int buf_len = serialize(GET, key, 64, buffer);
+        IntRand(0, KEY_SPACE_SIZE - 1);  // random key.  This is probably ideal
+                                         // for minimizing hash collisions
+    int buf_len = serialize(GET, key, VALUE_SIZE, buffer);
     ssize_t bytes_sent;
 
     // start timer and send message
@@ -227,8 +227,8 @@ int main(int argc, char* argv[]) {
 
   printf("Finishing Benchmarking\n");
   // send END message
-  uint64_t key = IntRand(0, 1000000 - 1);
-  int buf_len = serialize(END, key, 64, buffer);
+  uint64_t key = IntRand(0, KEY_SPACE_SIZE - 1);
+  int buf_len = serialize(END, key, VALUE_SIZE, buffer);
   bytes_sent = sendto(sockfd, buffer, buf_len, 0,
                       (struct sockaddr*)&server_addr, sizeof(server_addr));
   if (bytes_sent < 0) {
@@ -240,7 +240,7 @@ int main(int argc, char* argv[]) {
   bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL,
                             (struct sockaddr*)&server_addr, &addr_len);
   uint64_t total_requests = *(uint64_t*)buffer;
-  printf("Processed Requests: %f\n", total_requests);
+  printf("Processed Requests: %lu\n", total_requests);
 
   // Close socket
   close(sockfd);

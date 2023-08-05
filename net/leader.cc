@@ -25,7 +25,7 @@ extern "C" {
 
 #define SERVER_PORT 8889
 #define COMM_PORT 8890
-#define TABLE_SIZE 1000000
+#define KEY_SPACE_SIZE 1000000
 #define MSG_PER_CORE 500000
 
 // Commands to serialize
@@ -76,8 +76,8 @@ void* start_follower(void* ip) {
 
   char buffer[BUFFER_SZ];
   // Send START requests to follower
-  uint64_t key = IntRand(0, 1000000 - 1);  // Key doesn't matter
-  int buf_len = serialize(START, key, 64, buffer);
+  uint64_t key = IntRand(0, KEY_SPACE_SIZE - 1);  // Key doesn't matter
+  int buf_len = serialize(START, key, VALUE_SIZE, buffer);
   printf("Starting Follower\n");
   int bytes_sent = sendto(sockfd_follower, buffer, buf_len, MSG_WAITALL,
                           (struct sockaddr*)&follower_addr,
@@ -136,9 +136,9 @@ void* send_message(void* arg) {
   char buffer[BUFFER_SZ];
   for (int i = 0; i < MSG_PER_CORE; ++i) {
     uint64_t key =
-        IntRand(0, 1000000 - 1);  // random key.  This is probably ideal for
-                                  // minimizing hash collisions
-    int buf_len = serialize(GET, key, 64, buffer);
+        IntRand(0, KEY_SPACE_SIZE - 1);  // random key.  This is probably ideal
+                                         // for minimizing hash collisions
+    int buf_len = serialize(GET, key, VALUE_SIZE, buffer);
     ssize_t bytes_sent;
 
     // start timer and send message
@@ -229,11 +229,9 @@ int main(int argc, char* argv[]) {
   printf("Filling up Key-Value Store\n");
   // Send SET requests to fill up key-value store
   char buffer[BUFFER_SZ];
-  for (int i = 0; i < 1000000; ++i) {
-    uint64_t key =
-        IntRand(0, 1000000 - 1);  // random key.  This is probably ideal for
-                                  // minimizing hash collisions
-    int buf_len = serialize(SET, key, 64, buffer);
+  for (int i = 0; i < KEY_SPACE_SIZE; ++i) {
+    uint64_t key = i;
+    int buf_len = serialize(SET, key, VALUE_SIZE, buffer);
     ssize_t bytes_sent;
     bytes_sent =
         sendto(sockfd, buffer, buf_len, MSG_WAITALL,
@@ -284,8 +282,8 @@ int main(int argc, char* argv[]) {
 
   printf("Finishing Benchmarking\n");
   // send END message
-  uint64_t key = IntRand(0, 1000000 - 1);
-  int buf_len = serialize(END, key, 64, buffer);
+  uint64_t key = IntRand(0, KEY_SPACE_SIZE - 1);
+  int buf_len = serialize(END, key, VALUE_SIZE, buffer);
   int bytes_sent = sendto(sockfd, buffer, buf_len, 0,
                           (struct sockaddr*)&server_addr, sizeof(server_addr));
   if (bytes_sent < 0) {

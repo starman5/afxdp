@@ -32,6 +32,8 @@
 #include "../common/common_params.h"
 #include "../common/common_user_bpf_xdp.h"
 
+#define VALUE_SIZE 64
+
 #define NUM_FRAMES 4096
 #define FRAME_SIZE XSK_UMEM__DEFAULT_FRAME_SIZE
 #define RX_BATCH_SIZE 64
@@ -50,13 +52,15 @@
 #define SRC_PORT 8889
 #define DST_PORT 8889
 #define MAX_BUFFER_SIZE 1500
-#define TABLE_SIZE 1000000
+#define TABLE_SIZE 7000000
 
 #define NON 5
 #define SET 6
 #define GET 7
 #define DEL 8
 #define END 9
+
+#define DONT_OPTIMIZE(var) __asm__ __volatile__("" ::"m"(var));
 
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
@@ -417,6 +421,19 @@ static inline void csum_replace2(__sum16* sum, __be16 old, __be16 new) {
   *sum = ~csum16_add(csum16_sub(~(*sum), old), new);
 }
 
+static inline uint16_t compute_ip_checksum(struct iphdr* ip) {
+  uint32_t csum = 0;
+  uint16_t* next_ip_u16 = (uint16_t*)ip;
+
+  ip->check = 0;
+
+  for (int i = 0; i < (sizeof(*ip) >> 1); i++) {
+    csum += *next_ip_u16++;
+  }
+
+  return ~((csum & 0xffff) + (csum >> 16));
+}
+
 static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args) {
   Node** hashtable = th_args->hashtable;
@@ -428,27 +445,23 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   int ret;
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
-  struct in_addr tmp_ip;
+  uint32_t tmp_ip;
   struct ethhdr* eth = (struct ethhdr*)pkt;
   struct iphdr* iph = (struct iphdr*)(eth + 1);
   struct udphdr* udph = NULL;
+  if (ntohs(eth->h_proto) != ETH_P_IP) return false;
 
   // Retrieve payload
-  unsigned char* ip_payload = (unsigned char*)iph + (iph->ihl * 4);
-  unsigned char* buffer = ip_payload + sizeof(struct udphdr);
+  unsigned char* ip_data = (unsigned char*)iph + (iph->ihl << 2);
+  udph = (struct udphdr*)ip_data;
+  unsigned char* payload_data = ip_data + sizeof(struct udphdr);
 
   // Process request
   char* special_message = NULL;
   const char* default_message = "Message received";
-  // buffer[bytes_received] = '\0';  // Make buffer a null-terminated string
-  // printf("Received message from client: %s\n", buffer);
 
-  uint64_t comm = *(uint64_t*)buffer;
-  uint64_t key = *(uint64_t*)&buffer[8];
-  char* value = (char*)malloc(64);  // 64B value by default
-
-  // Get the value
-  memcpy(value, &buffer[16], 64);
+  uint8_t comm = *(uint8_t*)payload_data;
+  uint32_t key = *(uint32_t*)&payload_data[1];
   char* value_get = NULL;
 
   // Process message from the client
@@ -457,16 +470,21 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
       break;
 
     case SET: {
+      char* value = (char*)malloc(VALUE_SIZE);
+      // Get the value
+      memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
+             VALUE_SIZE);
       table_set(hashtable, key, value, locks);
-      countAr[idx].count = 0;
       break;
     }
 
     case GET: {
       value_get = table_get(hashtable, key, locks);
-      if (value_get && value_get[0] == '*') {  // Prevent compiler optimization
-        printf("star\n");
-      }
+#if VALUE_SIZE == 0
+      DONT_OPTIMIZE(value_get);
+#else
+      memcpy(payload_data, value_get, VALUE_SIZE);
+#endif
       countAr[idx].count += 1;
       break;
     }
@@ -478,24 +496,21 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 
     case END: {
       uint64_t total_count = 0;
-      for (int i = 0; i < NUM_SOCKETS; ++i) {
+      for (int i = 0; i < NUM_THREADS; ++i) {
         // @yangzhou, thread-safety issues
         total_count += countAr[i].count;
         printf("thread %d: %ld\n", i, countAr[i].count);
       }
       // Get the total number of processed requests and send back to user
-      char* end_message = malloc(15);
-      *(uint64_t*)end_message = total_count;
-      end_message[sizeof(uint64_t)] = '\0';
-      special_message = end_message;
+      memcpy(payload_data, (void*)&total_count, sizeof(uint64_t));
       break;
     }
 
-    default:
-      special_message = "Command Not Found";
+    default: {
+      special_message = "Not found";
+      memcpy(payload_data, special_message, strlen(special_message));
+    }
   }
-
-  if (ntohs(eth->h_proto) != ETH_P_IP) return false;
 
   // Swap source and destination MAC
   memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
@@ -503,25 +518,17 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   memcpy(eth->h_source, tmp_mac, ETH_ALEN);
 
   // Swap source and destination IP
-  memcpy(&tmp_ip, &iph->saddr, sizeof(tmp_ip));
-  memcpy(&iph->saddr, &iph->daddr, sizeof(tmp_ip));
-  memcpy(&iph->daddr, &tmp_ip, sizeof(tmp_ip));
+  tmp_ip = iph->saddr;
+  iph->saddr = iph->daddr;
+  iph->daddr = tmp_ip;
 
   // Swap source and destination port
-  unsigned char* ip_data = (unsigned char*)iph + (iph->ihl * 4);
-  udph = (struct udphdr*)ip_data;
-  // printf("src: %d\n", udph->source);
-  // printf("dst: %d\n", udph->dest);
   uint16_t tmp = udph->source;
   udph->source = udph->dest;
   udph->dest = tmp;
 
-  unsigned char* payload_data = (unsigned char*)(udph) + sizeof(struct udphdr);
-  if (special_message) {
-    memcpy(payload_data, special_message, strlen(special_message));
-  } else if (value_get) {
-    memcpy(payload_data, value_get, 64);
-  }
+  // Causing transmission erros, but why?
+  // iph->check = compute_ip_checksum(iph);
   udph->check = 0;
 
   /* Here we sent the packet out of the receive port. Note that
