@@ -18,8 +18,8 @@ begins sending GET requests
 #include <unistd.h>
 
 // Change these to reflect the actual topology
-#define SERVER_IP "10.10.1.9"
-#define LEADER_IP "10.10.1.8"
+#define SERVER_IP "192.168.6.1"
+#define LEADER_IP "192.168.6.2"
 
 #define SERVER_PORT 8889
 #define COMM_PORT 8890
@@ -37,8 +37,7 @@ begins sending GET requests
 #define BUFFER_SZ 1500
 
 // Serialize message into format recognized by the server
-int serialize(uint64_t comm, uint64_t key, int val_len,
-              char* buffer) {
+int serialize(uint64_t comm, uint64_t key, int val_len, char* buffer) {
   int pos = 0;
   memcpy(buffer, (void*)&comm, 8);
   pos += 8;
@@ -147,7 +146,7 @@ void* send_message(void* arg) {
   char buffer[BUFFER_SZ];
   for (int i = 0; i < MSG_PER_CORE; ++i) {
     uint64_t key = rand() % 1000000;  // random key.  This is probably ideal for
-                            // minimizing hash collisions
+                                      // minimizing hash collisions
     int buf_len = serialize(GET, key, 64, buffer);
     ssize_t bytes_sent;
 
@@ -241,7 +240,7 @@ int main(int argc, char* argv[]) {
   char buffer[BUFFER_SZ];
   for (int i = 0; i < 1000000; ++i) {
     uint64_t key = rand() % 1000000;  // random key.  This is probably ideal for
-                            // minimizing hash collisions
+                                      // minimizing hash collisions
     int buf_len = serialize(SET, key, 64, buffer);
     ssize_t bytes_sent;
     bytes_sent =
