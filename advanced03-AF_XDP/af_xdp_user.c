@@ -340,7 +340,7 @@ static struct xsk_socket_info *xsk_configure_socket(struct config *cfg,
 	int i;
 	int ret;
 	uint32_t prog_id;
-	int queue_id = 20;
+	int queue_id = 10;
 
 	xsk_info = calloc(1, sizeof(*xsk_info));
 	if (!xsk_info)
@@ -657,7 +657,7 @@ static void rx_and_process(void* args)
 	struct timespec timeout_end;
 	struct timespec timeout_elapsed;
 
-	if (pin_thread_to_core(idx) != 0) {
+	if (pin_thread_to_core(10) != 0) {
         perror("Could not pin thread to core\n");
         exit(EXIT_FAILURE);
     }
