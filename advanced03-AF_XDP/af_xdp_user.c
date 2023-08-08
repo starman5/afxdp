@@ -890,7 +890,7 @@ int main(int argc, char **argv)
 
 	/* Allocate memory for NUM_FRAMES of the default XDP frame size */
 	packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
-	
+	printf("fuck\n");
 	for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
 		// Allocate packet buffer
 		if (posix_memalign(&(packet_buffers[sockidx]),
@@ -900,7 +900,7 @@ int main(int argc, char **argv)
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-
+		printf("you\n");
 		/* Configure UMEM */
 		umems[sockidx] = configure_xsk_umem(packet_buffers[sockidx], packet_buffer_size);
 		if (umems[sockidx] == NULL) {
@@ -908,7 +908,7 @@ int main(int argc, char **argv)
 				strerror(errno));
 			exit(EXIT_FAILURE);
 		}
-
+		printf("bitch\n");
 		/* Open and configure the AF_XDP (xsk) sockets */
 		xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], sockidx);
 		if (xsk_sockets[sockidx] == NULL) {
@@ -917,7 +917,7 @@ int main(int argc, char **argv)
 			exit(EXIT_FAILURE);
 		}
 	}
-	
+	printf("bitch2\n");
 	/* Receive and count packets than drop them */
 	pthread_t threads[NUM_THREADS];
 
@@ -940,7 +940,7 @@ int main(int argc, char **argv)
 	// Initialize the hashtable, which will serve as the in-memory key-value store
     Node** hashtable = (Node**)malloc(TABLE_SIZE * sizeof(Node*));
     initialize_hashtable(hashtable);
-
+	printf("bitch3\n");
 	struct threadArgs* threadArgs_ar[NUM_THREADS];
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
@@ -950,7 +950,7 @@ int main(int argc, char **argv)
 		threadArgs_ar[th_idx]->locks = locks;
 		ret = pthread_create(&threads[th_idx], NULL, rx_and_process, threadArgs_ar[th_idx]);
 	}
-	
+	printf("bitch4\n");
 	// Wait for all threads to finish
 	for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
 		pthread_join(threads[th_idx], NULL);
