@@ -15,7 +15,7 @@
 #include <time.h>
 #include <sched.h>
 
-#define MAX_BUFFER_SIZE 1024
+#define MAX_BUFFER_SIZE 60
 #define SERVER_PORT 8889
 #define NUM_CORES   1
 #define TABLE_SIZE  10000
