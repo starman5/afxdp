@@ -39,7 +39,7 @@
 #define RX_BATCH_SIZE 64
 #define TX_BATCH_SIZE 5
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define NUM_SOCKETS 1
+#define NUM_SOCKETS 2
 #define NUM_THREADS NUM_SOCKETS
 #define TIMEOUT_NSEC 500000000
 #define CACHE_LINE_SIZE 64
@@ -328,7 +328,6 @@ static struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   int i;
   int ret;
   uint32_t prog_id;
-  int queue_id = 20;
 
   xsk_info = calloc(1, sizeof(*xsk_info));
   if (!xsk_info) return NULL;
@@ -339,7 +338,7 @@ static struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   xsk_cfg.xdp_flags = cfg->xdp_flags;
   xsk_cfg.bind_flags = cfg->xsk_bind_flags;
   xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD : 0;
-  ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue_id,
+  ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue,
                                   umem->umem, &xsk_info->rx, &xsk_info->tx,
                                   &umem->fq, &umem->cq, &xsk_cfg);
   if (ret) goto error_exit;
@@ -862,7 +861,7 @@ int main(int argc, char** argv) {
     }
 
     /* Open and configure the AF_XDP (xsk) sockets */
-    xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], sockidx);
+    xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], 20 + sockidx);
     if (xsk_sockets[sockidx] == NULL) {
       fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
               strerror(errno));
