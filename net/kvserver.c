@@ -221,47 +221,27 @@ void* handle_request(void* arg) {
         buffer[bytes_received] = '\0';  // Make buffer a null-terminated string
         //printf("Received message from client: %s\n", buffer);
 
-        uint64_t comm = ((int)(buffer[0] - '0'));
-        uint64_t key;
-        char* value = (char*)malloc(MAX_BUFFER_SIZE - sizeof(comm) - sizeof(key));
-
-        // Get key from serialized message
-        int pos = 2;    // Starting position of key in serialized string
-        int numbytes = 0;
-        while (buffer[pos] != '|') {
-            ++numbytes;
-            ++pos;
-        }
-        char keybuf[10];
-        memcpy(keybuf, &buffer[2], numbytes);
-        keybuf[numbytes] = '\0';
-        char* endptr;
-        key = strtol(keybuf, &endptr, 10);
-
-        // Get the value
-        ++pos;
-        strcpy(value, &buffer[pos]);
+        uint8_t comm = *(uint8_t*)payload_data;
+        uint32_t key = *(uint32_t*)&payload_data[1];
 
         // Process message from the client
         switch (comm) {
             case NON:
                 break;
             case SET:
+                char* value = (char*)malloc(VALUE_SIZE);
+                // Get the value
+                memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
+                    VALUE_SIZE);
                 table_set(hashtable, key, value, locks);
                 break;
 
             case GET:
                 ;
-                //countArr[core_id].count += 1;
                 char* val = table_get(hashtable, key, locks);
                 if (val && val[0] == '*') {    // Prevent compiler optimization
                     printf("star\n");
                 }
-                /*if (val) {
-                    //printf("Value at Key %lu is %s\n", key, val);
-                } else {
-                    //printf("Key not found\n");
-                }*/
                 break;
 
             case DEL:
@@ -283,6 +263,8 @@ void* handle_request(void* arg) {
 
             default:
                 special_message = "Command Not Found";
+
+            countArr[core_id].count += 1;
         }
         
         countArr[core_id].count += 1;
@@ -302,6 +284,7 @@ void* handle_request(void* arg) {
         //    break;
         //}
     }
+
 
     close(sockfd);
     pthread_exit(NULL);
