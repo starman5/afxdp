@@ -20,6 +20,7 @@
 #define NUM_CORES   1
 #define TABLE_SIZE  10000
 #define CACHE_LINE_SIZE 64
+#define VALUE_SIZE  40
 
 // Commands to integer conversions for serializing messages
 #define NON     5
@@ -221,8 +222,8 @@ void* handle_request(void* arg) {
         buffer[bytes_received] = '\0';  // Make buffer a null-terminated string
         //printf("Received message from client: %s\n", buffer);
 
-        uint8_t comm = *(uint8_t*)payload_data;
-        uint32_t key = *(uint32_t*)&payload_data[1];
+        uint8_t comm = *(uint8_t*)buffer;
+        uint32_t key = *(uint32_t*)&buffer[1];
 
         // Process message from the client
         switch (comm) {
