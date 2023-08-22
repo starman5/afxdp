@@ -144,5 +144,3 @@ static inline __sum16 csum16_sub(__sum16 csum, __be16 addend);
 static inline void csum_replace2(__sum16* sum, __be16 old, __be16 new);
 
 static inline uint16_t compute_ip_checksum(struct iphdr* ip);
-
-static void rx_and_process(void* args);
