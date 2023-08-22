@@ -58,12 +58,6 @@ atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
 
-static struct xdp_program* prog;
-int xsk_map_fd;
-bool custom_xsk = false;
-struct config cfg = {
-    .ifindex = -1,
-};
 
 typedef struct node {
   uint64_t key;

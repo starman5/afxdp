@@ -40,6 +40,13 @@
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
+static struct xdp_program* prog;
+int xsk_map_fd;
+bool custom_xsk = false;
+struct config cfg = {
+    .ifindex = -1,
+};
+
 struct xsk_umem_info {
   struct xsk_ring_prod fq;
   struct xsk_ring_cons cq;
