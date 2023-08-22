@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
 
 XDP_TARGETS  := af_xdp_kern
-USER_TARGETS := af_xdp_user af_xdp_lib
+USER_TARGETS := af_xdp_lib af_xdp_user 
 LDLIBS+= -lpthread
 
 COMMON_DIR = ../common
