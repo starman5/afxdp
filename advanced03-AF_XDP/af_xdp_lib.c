@@ -155,57 +155,6 @@ static inline uint16_t compute_ip_checksum(struct iphdr* ip) {
   return ~((csum & 0xffff) + (csum >> 16));
 }
 
-static void handle_receive_packets(struct threadArgs* th_args) {
-  struct xsk_socket_info* xsk = th_args->xski;
-  int idx = th_args->idx;
-
-  unsigned int rcvd, stock_frames, i;
-  uint32_t idx_rx = 0, idx_fq = 0;
-  int ret;
-
-  // Check if there is something to consume at all
-
-  rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
-  if (!rcvd) return;
-
-  // atomic_fetch_add(&num_ready, 1);
-  /* Stuff the ring with as much frames as possible */
-  stock_frames = xsk_prod_nb_free(&xsk->umem->fq, xsk_umem_free_frames(xsk));
-
-  if (stock_frames > 0) {
-    ret = xsk_ring_prod__reserve(&xsk->umem->fq, stock_frames, &idx_fq);
-    /* This should not happen, but just in case */
-    while (ret != stock_frames)
-      ret = xsk_ring_prod__reserve(&xsk->umem->fq, rcvd, &idx_fq);
-
-    for (i = 0; i < stock_frames; i++)
-      *xsk_ring_prod__fill_addr(&xsk->umem->fq, idx_fq++) =
-          xsk_alloc_umem_frame(xsk);
-
-    xsk_ring_prod__submit(&xsk->umem->fq, stock_frames);
-  }
-
-  /* Process received packets */
-  for (i = 0; i < rcvd; i++) {
-    uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
-    uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
-
-    if (!process_packet(xsk, addr, len, th_args)) {
-      printf("Couldn't send!\n");
-      xsk_free_umem_frame(xsk, addr);
-    }
-    xsk->stats.rx_bytes += len;
-  }
-
-  xsk_ring_cons__release(&xsk->rx, rcvd);
-  xsk->stats.rx_packets += rcvd;
-
-  /* Do we need to wake up the kernel for transmission */
-  complete_tx(xsk);
-
-  // Reset timeout start
-  clock_gettime(CLOCK_MONOTONIC, &timeout_start);
-}
 
 static void rx_and_process(void* args) {
   struct threadArgs* th_args = (struct threadArgs*)args;
