@@ -31,8 +31,7 @@
 #include "../common/common_libbpf.h"
 #include "../common/common_params.h"
 #include "../common/common_user_bpf_xdp.h"
-
-#include "af_xdp_lib.h"
+#include "../common/common_af_xdp_lib.h"
 
 #define VALUE_SIZE 64
 
