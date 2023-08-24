@@ -2,7 +2,7 @@
 LIB_DIR = ../lib
 include $(LIB_DIR)/defines.mk
 
-all: common_params.o common_user_bpf_xdp.o
+all: common_params.o common_user_bpf_xdp.o common_af_xdp_lib.o
 
 CFLAGS += -I$(LIB_DIR)/install/include
 
@@ -10,6 +10,9 @@ common_params.o: common_params.c common_params.h
 	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
 
 common_user_bpf_xdp.o: common_user_bpf_xdp.c common_user_bpf_xdp.h
+	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
+
+common_af_xdp_lib.o: common_af_xdp_lib.c common_af_xdp_lib.h
 	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
 
 .PHONY: clean
