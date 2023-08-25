@@ -78,7 +78,7 @@ struct xsk_socket_info {
   struct stats_record prev_stats;
 };
 
-inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r);
+__u32 xsk_ring_prod__free(struct xsk_ring_prod* r);
 
 const char* __doc__ = "AF_XDP kernel bypass example\n";
 
@@ -140,12 +140,12 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
 
 void complete_tx(struct xsk_socket_info* xsk);
 
-inline __sum16 csum16_add(__sum16 csum, __be16 addend);
+__sum16 csum16_add(__sum16 csum, __be16 addend);
 
-inline __sum16 csum16_sub(__sum16 csum, __be16 addend);
+__sum16 csum16_sub(__sum16 csum, __be16 addend);
 
-inline void csum_replace2(__sum16* sum, __be16 old, __be16 new);
+void csum_replace2(__sum16* sum, __be16 old, __be16 new);
 
-inline uint16_t compute_ip_checksum(struct iphdr* ip);
+uint16_t compute_ip_checksum(struct iphdr* ip);
 
 #endif
