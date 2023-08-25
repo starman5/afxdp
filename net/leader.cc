@@ -242,6 +242,7 @@ int main(int argc, char* argv[]) {
     }
     int bytes_received = recvfrom(sockfd, buffer, BUFFER_SZ, MSG_WAITALL,
                                   (struct sockaddr*)&server_addr, &addr_len);
+    printf("received\n");
   }
 
   pthread_t follower_threads[num_followers];
