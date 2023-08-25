@@ -24,7 +24,7 @@ typedef struct node {
   struct node* next;
 } Node;
 
-typedef HASHTABLE_T Node**;
+typedef Node** HASHTABLE_T;
 
 typedef struct spinlock {
   pthread_spinlock_t lock;
