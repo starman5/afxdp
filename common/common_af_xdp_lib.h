@@ -44,7 +44,7 @@
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
 static struct xdp_program* prog;
-int xsk_map_fd;
+static int xsk_map_fd;
 static bool custom_xsk = false;
 static struct config cfg = {
     .ifindex = -1,
@@ -124,7 +124,7 @@ static const struct option_wrapper long_options[] = {
 
     {{0, 0, NULL, 0}, NULL, false}};
 
-bool global_exit;
+static bool global_exit;
 
 struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size);
 
