@@ -315,7 +315,6 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 }
 
 static void handle_receive_packets(struct threadArgs* th_args) {
-  printf("handle receive packets\n");
   struct xsk_socket_info* xsk = th_args->xski;
   int idx = th_args->idx;
 
@@ -330,7 +329,6 @@ static void handle_receive_packets(struct threadArgs* th_args) {
 
   // atomic_fetch_add(&num_ready, 1);
   /* Stuff the ring with as much frames as possible */
-  printf("STUFF\n");
   stock_frames = xsk_prod_nb_free(&xsk->umem->fq, xsk_umem_free_frames(xsk));
 
   if (stock_frames > 0) {
@@ -369,7 +367,6 @@ static void handle_receive_packets(struct threadArgs* th_args) {
 }
 
 static void rx_and_process(void* args) {
-  printf("rx and process\n");
   struct threadArgs* th_args = (struct threadArgs*)args;
   struct xsk_socket_info* xski = th_args->xski;
   int idx = th_args->idx;
