@@ -44,14 +44,14 @@
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
-typedef static bool (*ProcessFunction)(uint8_t*);
+typedef bool (*ProcessFunction)(uint8_t*);
 
-typedef static struct counter {
+typedef struct counter {
   uint64_t count;
   char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
 } Counter;
 
-static struct threadArgs {
+struct threadArgs {
   struct xsk_socket_info* xski;
   int idx;
   HASHTABLE_T hashtable;

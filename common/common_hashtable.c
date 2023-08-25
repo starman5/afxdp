@@ -1,4 +1,4 @@
-#include "common_hashtable.h"
+#include "../common/common_hashtable.h"
 
 // Initialize a spinlock for each bucket, for minimal lock contention
 // Return array of spinlocks

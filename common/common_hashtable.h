@@ -3,9 +3,24 @@
 
 #define _GNU_SOURCE
 
+#define _GNU_SOURCE
+
+#include <arpa/inet.h>
+#include <assert.h>
+#include <bpf/bpf.h>
 #include <errno.h>
 #include <getopt.h>
+#include <linux/icmpv6.h>
+#include <linux/if_ether.h>
+#include <linux/if_link.h>
+#include <linux/ip.h>
+#include <linux/udp.h>
+#include <locale.h>
+#include <net/if.h>
+#include <poll.h>
+#include <pthread.h>
 #include <sched.h>
+#include <signal.h>
 #include <stdalign.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -13,7 +28,14 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <sys/sysinfo.h>
+#include <time.h>
 #include <unistd.h>
+#include <xdp/libxdp.h>
+#include <xdp/xsk.h>
+
+#include "../common/common_libbpf.h"
+#include "../common/common_params.h"
+#include "../common/common_user_bpf_xdp.h"
 
 #define TABLE_SIZE 7000000
 #define VALUE_SIZE 64
