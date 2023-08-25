@@ -44,9 +44,9 @@
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
-static typedef bool (*ProcessFunction)(uint8_t*);
+typedef static bool (*ProcessFunction)(uint8_t*);
 
-static typedef struct counter {
+typedef static struct counter {
   uint64_t count;
   char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
 } Counter;
