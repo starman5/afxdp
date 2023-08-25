@@ -41,18 +41,17 @@
 #define RX_BATCH_SIZE 64
 #define TX_BATCH_SIZE 5
 #define INVALID_UMEM_FRAME UINT64_MAX
-#define CACHE_LINE_SIZE 64
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
-typedef bool (*ProcessFunction)(uint8_t*);
+static typedef bool (*ProcessFunction)(uint8_t*);
 
-typedef struct counter {
+static typedef struct counter {
   uint64_t count;
   char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
 } Counter;
 
-struct threadArgs {
+static struct threadArgs {
   struct xsk_socket_info* xski;
   int idx;
   HASHTABLE_T hashtable;

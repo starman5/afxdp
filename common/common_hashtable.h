@@ -17,6 +17,7 @@
 
 #define TABLE_SIZE 7000000
 #define VALUE_SIZE 64
+#define CACHE_LINE_SIZE 64
 
 typedef struct node {
   uint64_t key;
