@@ -229,6 +229,7 @@ static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
       memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
              VALUE_SIZE);
       table_set(hashtable, key, value, locks);
+      countAr[idx].count += 1;
       break;
     }
 
