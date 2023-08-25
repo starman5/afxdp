@@ -45,8 +45,8 @@
 
 static struct xdp_program* prog;
 int xsk_map_fd;
-bool custom_xsk = false;
-struct config cfg = {
+static bool custom_xsk = false;
+static struct config cfg = {
     .ifindex = -1,
 };
 
@@ -80,9 +80,9 @@ struct xsk_socket_info {
 
 __u32 xsk_ring_prod__free(struct xsk_ring_prod* r);
 
-const char* __doc__ = "AF_XDP kernel bypass example\n";
+static const char* __doc__ = "AF_XDP kernel bypass example\n";
 
-const struct option_wrapper long_options[] = {
+static const struct option_wrapper long_options[] = {
 
     {{"help", no_argument, NULL, 'h'}, "Show help", false},
 
