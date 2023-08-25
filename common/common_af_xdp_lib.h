@@ -78,11 +78,11 @@ struct xsk_socket_info {
   struct stats_record prev_stats;
 };
 
-static inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r);
+inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r);
 
-static const char* __doc__ = "AF_XDP kernel bypass example\n";
+const char* __doc__ = "AF_XDP kernel bypass example\n";
 
-static const struct option_wrapper long_options[] = {
+const struct option_wrapper long_options[] = {
 
     {{"help", no_argument, NULL, 'h'}, "Show help", false},
 
@@ -124,28 +124,28 @@ static const struct option_wrapper long_options[] = {
 
     {{0, 0, NULL, 0}, NULL, false}};
 
-static bool global_exit;
+bool global_exit;
 
-static struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size);
+struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size);
 
-static uint64_t xsk_alloc_umem_frame(struct xsk_socket_info* xsk);
+uint64_t xsk_alloc_umem_frame(struct xsk_socket_info* xsk);
 
-static void xsk_free_umem_frame(struct xsk_socket_info* xsk, uint64_t frame);
+void xsk_free_umem_frame(struct xsk_socket_info* xsk, uint64_t frame);
 
-static uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk);
+uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk);
 
-static struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
+struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
                                                     struct xsk_umem_info* umem,
                                                     int queue);
 
-static void complete_tx(struct xsk_socket_info* xsk);
+void complete_tx(struct xsk_socket_info* xsk);
 
-static inline __sum16 csum16_add(__sum16 csum, __be16 addend);
+inline __sum16 csum16_add(__sum16 csum, __be16 addend);
 
-static inline __sum16 csum16_sub(__sum16 csum, __be16 addend);
+inline __sum16 csum16_sub(__sum16 csum, __be16 addend);
 
-static inline void csum_replace2(__sum16* sum, __be16 old, __be16 new);
+inline void csum_replace2(__sum16* sum, __be16 old, __be16 new);
 
-static inline uint16_t compute_ip_checksum(struct iphdr* ip);
+inline uint16_t compute_ip_checksum(struct iphdr* ip);
 
 #endif

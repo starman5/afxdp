@@ -1,11 +1,11 @@
 #include "common_af_xdp_lib.h"
 
-static inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r) {
+inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r) {
   r->cached_cons = *r->consumer + r->size;
   return r->cached_cons - r->cached_prod;
 }
 
-static struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size) {
+struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size) {
   struct xsk_umem_info* umem;
   int ret;
 
@@ -22,7 +22,7 @@ static struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size) {
   return umem;
 }
 
-static uint64_t xsk_alloc_umem_frame(struct xsk_socket_info* xsk) {
+uint64_t xsk_alloc_umem_frame(struct xsk_socket_info* xsk) {
   uint64_t frame;
   if (xsk->umem_frame_free == 0) return INVALID_UMEM_FRAME;
 
@@ -31,17 +31,17 @@ static uint64_t xsk_alloc_umem_frame(struct xsk_socket_info* xsk) {
   return frame;
 }
 
-static void xsk_free_umem_frame(struct xsk_socket_info* xsk, uint64_t frame) {
+void xsk_free_umem_frame(struct xsk_socket_info* xsk, uint64_t frame) {
   assert(xsk->umem_frame_free < NUM_FRAMES);
 
   xsk->umem_frame_addr[xsk->umem_frame_free++] = frame;
 }
 
-static uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk) {
+uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk) {
   return xsk->umem_frame_free;
 }
 
-static struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
+struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
                                                     struct xsk_umem_info* umem,
                                                     int queue) {
   struct xsk_socket_config xsk_cfg;
@@ -99,7 +99,7 @@ error_exit:
   return NULL;
 }
 
-static void complete_tx(struct xsk_socket_info* xsk) {
+void complete_tx(struct xsk_socket_info* xsk) {
   unsigned int completed;
   uint32_t idx_cq;
 
@@ -127,22 +127,22 @@ static void complete_tx(struct xsk_socket_info* xsk) {
   }
 }
 
-static inline __sum16 csum16_add(__sum16 csum, __be16 addend) {
+inline __sum16 csum16_add(__sum16 csum, __be16 addend) {
   uint16_t res = (uint16_t)csum;
 
   res += (__u16)addend;
   return (__sum16)(res + (res < (__u16)addend));
 }
 
-static inline __sum16 csum16_sub(__sum16 csum, __be16 addend) {
+inline __sum16 csum16_sub(__sum16 csum, __be16 addend) {
   return csum16_add(csum, ~addend);
 }
 
-static inline void csum_replace2(__sum16* sum, __be16 old, __be16 new) {
+inline void csum_replace2(__sum16* sum, __be16 old, __be16 new) {
   *sum = ~csum16_add(csum16_sub(~(*sum), old), new);
 }
 
-static inline uint16_t compute_ip_checksum(struct iphdr* ip) {
+inline uint16_t compute_ip_checksum(struct iphdr* ip) {
   uint32_t csum = 0;
   uint16_t* next_ip_u16 = (uint16_t*)ip;
 
