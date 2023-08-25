@@ -167,13 +167,13 @@ void csum_replace2(__sum16* sum, __be16 old, __be16 new);
 
 uint16_t compute_ip_checksum(struct iphdr* ip);
 
+bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
+                           uint32_t len, struct threadArgs* th_args);
+
 void handle_receive_packets(struct threadArgs* th_args);
 
 void rx_and_process(void* args);
 
-void start_afxdp(int num_sockets, ProcessFunction custom_processing);
-
-bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
-                           uint32_t len, struct threadArgs* th_args);
+void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable);
 
 #endif

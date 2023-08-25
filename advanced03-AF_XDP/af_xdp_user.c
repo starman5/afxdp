@@ -1,42 +1,9 @@
-#define _GNU_SOURCE
-
-#include <arpa/inet.h>
-#include <assert.h>
-#include <bpf/bpf.h>
-#include <errno.h>
-#include <getopt.h>
-#include <linux/icmpv6.h>
-#include <linux/if_ether.h>
-#include <linux/if_link.h>
-#include <linux/ip.h>
-#include <linux/udp.h>
-#include <locale.h>
-#include <net/if.h>
-#include <poll.h>
-#include <pthread.h>
-#include <sched.h>
-#include <signal.h>
-#include <stdalign.h>
-#include <stdatomic.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/resource.h>
-#include <sys/sysinfo.h>
-#include <time.h>
-#include <unistd.h>
-#include <xdp/libxdp.h>
-#include <xdp/xsk.h>
-
-#include "../common/common_libbpf.h"
-#include "../common/common_params.h"
-#include "../common/common_user_bpf_xdp.h"
 #include "../common/common_af_xdp_lib.h"
 
+// Keep in mind that NUM_SOCKETS = num threads.  One thread per socket
 #define NUM_SOCKETS 1
 
-#define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
-
+// For extracting requested hashtable operations from packet payload
 #define NON 5
 #define SET 6
 #define GET 7
@@ -45,9 +12,9 @@
 
 #define DONT_OPTIMIZE(var) __asm__ __volatile__("" ::"m"(var));
 
-// These are for counting the number of packets processed
+// These are for counting the number of packets processed, returned when signal received
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
-Counter countAr[NUM_THREADS];
+Counter countAr[NUM_SOCKETS];
 
 // These are for defunct polling logic
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
@@ -57,7 +24,7 @@ struct timespec timeout_start = {0, 0};
 // Executed when signal received to stop
 static void exit_application(int signal) {
   uint64_t npackets = 0;
-  for (int i = 0; i < NUM_THREADS; ++i) {
+  for (int i = 0; i < NUM_SOCKETS; ++i) {
     printf("thread %d: %d\n", i, countAr[i].count);
     npackets += countAr[i].count;
   }
@@ -75,8 +42,16 @@ static void exit_application(int signal) {
   global_exit = true;
 }
 
-// Change this function to suit your needs
-// This is the custom packet processing logic
+//*********************************************************************
+//******************** Mandatory AF_XDP Logic *************************
+//*********************************************************************
+
+/*
+You must define a function with the signature "bool func(uint8_t* pkt)".
+This function defines how you would like to process the raw packet.
+It should return true upon successful completion and false on error.
+In this case, it performs hashtable operations.
+*/
 bool custom_processing(uint8_t* pkt) {
   int ret;
   uint32_t tx_idx = 0;
@@ -133,7 +108,7 @@ bool custom_processing(uint8_t* pkt) {
 
     case END: {
       uint64_t total_count = 0;
-      for (int i = 0; i < NUM_THREADS; ++i) {
+      for (int i = 0; i < NUM_SOCKETS; ++i) {
         // @yangzhou, thread-safety issues
         total_count += countAr[i].count;
         printf("thread %d: %ld\n", i, countAr[i].count);
@@ -172,10 +147,13 @@ bool custom_processing(uint8_t* pkt) {
 }
 
 int main(int argc, char** argv) {
+  int err;
+  char errmsg[1024];
+
   /* Global shutdown handler */
   signal(SIGINT, exit_application);
 
-  /* Cmdline options can change progname */
+  /* Cmdline options */
   parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
 
   /* Required option */
@@ -229,18 +207,18 @@ int main(int argc, char** argv) {
   }
   
   // Initialize the spinlocks for the hashtable
-  Spinlock* spinlocks = init_spinlocks();
+  Spinlock* locks = init_spinlocks();
 
   // Initialize the hashtable, which will serve as the in-memory key-value store
   HASHTABLE_T hashtable = init_hashtable();
 
   // Initialize global counter array for our own statistics
-  for (int i = 0; i < NUM_THREADS; ++i) {
+  for (int i = 0; i < NUM_SOCKETS; ++i) {
     countAr[i].count = 0;
   }
 
   // Start NUM_SOCKETS AF_XDP sockets
-  start_afxdp(NUM_SOCKETS, custom_processing)
+  start_afxdp(NUM_SOCKETS, custom_processing, locks, hashtable);
 
   return EXIT_OK;
 }

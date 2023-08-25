@@ -309,7 +309,7 @@ void rx_and_process(void* args) {
   }
 }
 
-void start_afxdp(int num_sockets, ProcessFunction custom_processing) {
+void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
   int ret;
   void* packet_buffers[num_sockets];
   uint64_t packet_buffer_size;
@@ -318,9 +318,6 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing) {
   struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
   struct xsk_umem_info* umems[num_sockets];
   struct xsk_socket_info* xsk_sockets[num_sockets];
-  pthread_t stats_poll_thread;
-  int err;
-  char errmsg[1024];
 
   /* Allow unlimited locking of memory, so all memory needed for packet
    * buffers can be locked.
@@ -399,176 +396,4 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing) {
   free(locks);
 
   return EXIT_OK;
-}
-
-
-int main(int argc, char** argv) {
-  int ret;
-  void* packet_buffers[NUM_SOCKETS];
-  uint64_t packet_buffer_size;
-  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
-  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
-  struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
-  struct xsk_umem_info* umems[NUM_SOCKETS];
-  struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
-  pthread_t stats_poll_thread;
-  int err;
-  char errmsg[1024];
-
-  /* Global shutdown handler */
-  signal(SIGINT, exit_application);
-
-  /* Cmdline options can change progname */
-  parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
-
-  /* Required option */
-  if (cfg.ifindex == -1) {
-    fprintf(stderr, "ERROR: Required option --dev missing\n\n");
-    usage(argv[0], __doc__, long_options, (argc == 1));
-    return EXIT_FAIL_OPTION;
-  }
-
-  /* Load custom program if configured */
-  if (cfg.filename[0] != 0) {
-    struct bpf_map* map;
-
-    custom_xsk = true;
-    xdp_opts.open_filename = cfg.filename;
-    xdp_opts.prog_name = cfg.progname;
-    xdp_opts.opts = &opts;
-
-    if (cfg.progname[0] != 0) {
-      xdp_opts.open_filename = cfg.filename;
-      xdp_opts.prog_name = cfg.progname;
-      xdp_opts.opts = &opts;
-
-      prog = xdp_program__create(&xdp_opts);
-    } else {
-      prog = xdp_program__open_file(cfg.filename, NULL, &opts);
-    }
-    err = libxdp_get_error(prog);
-    if (err) {
-      libxdp_strerror(err, errmsg, sizeof(errmsg));
-      fprintf(stderr, "ERR: loading program: %s\n", errmsg);
-      return err;
-    }
-
-    err = xdp_program__attach(prog, cfg.ifindex, cfg.attach_mode, 0);
-    if (err) {
-      libxdp_strerror(err, errmsg, sizeof(errmsg));
-      fprintf(stderr, "Couldn't attach XDP program on iface '%s' : %s (%d)\n",
-              cfg.ifname, errmsg, err);
-      return err;
-    }
-
-    /* We also need to load the xsks_map */
-    map = bpf_object__find_map_by_name(xdp_program__bpf_obj(prog), "xsks_map");
-    xsk_map_fd = bpf_map__fd(map);
-    printf("correct xsk_map_fd: %d\n", xsk_map_fd);
-    if (xsk_map_fd < 0) {
-      fprintf(stderr, "ERROR: no xsks map found: %s\n", strerror(xsk_map_fd));
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  /* Allow unlimited locking of memory, so all memory needed for packet
-   * buffers can be locked.
-   */
-  if (setrlimit(RLIMIT_MEMLOCK, &rlim)) {
-    fprintf(stderr, "ERROR: setrlimit(RLIMIT_MEMLOCK) \"%s\"\n",
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
-
-  /* Allocate memory for NUM_FRAMES of the default XDP frame size */
-  packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
-
-  for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-    // Allocate packet buffer
-    if (posix_memalign(&(packet_buffers[sockidx]),
-                       getpagesize(), /* PAGE_SIZE aligned */
-                       packet_buffer_size)) {
-      fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
-              strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-
-    /* Configure UMEM */
-    umems[sockidx] =
-        configure_xsk_umem(packet_buffers[sockidx], packet_buffer_size);
-    if (umems[sockidx] == NULL) {
-      fprintf(stderr, "ERROR: Can't create umem \"%s\"\n", strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-
-    /* Open and configure the AF_XDP (xsk) sockets */
-    xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], 20 + sockidx);
-    if (xsk_sockets[sockidx] == NULL) {
-      fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
-              strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  /* Receive and count packets than drop them */
-  pthread_t threads[NUM_THREADS];
-
-  // Initialize a spinlock for each bucket, for minimal lock contention
-  void* rawPtr_Spinlock;
-  if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
-                     TABLE_SIZE * sizeof(Spinlock)) != 0) {
-    perror("posix_memalign error\n");
-    exit(EXIT_FAILURE);
-  }
-  Spinlock* locks = (Spinlock*)rawPtr_Spinlock;
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    pthread_spin_init(&locks[i].lock, PTHREAD_PROCESS_PRIVATE);
-  }
-
-  // Initialize global counter array
-  for (int i = 0; i < NUM_THREADS; ++i) {
-    countAr[i].count = 0;
-  }
-
-  // Initialize the hashtable, which will serve as the in-memory key-value store
-  HASHTABLE_T hashtable = (HASHTABLE_T)malloc(TABLE_SIZE * sizeof(Node*));
-  initialize_hashtable(hashtable);
-
-  struct threadArgs* threadArgs_ar[NUM_THREADS];
-  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-    threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
-    threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
-    threadArgs_ar[th_idx]->idx = th_idx;
-    threadArgs_ar[th_idx]->hashtable = hashtable;
-    threadArgs_ar[th_idx]->locks = locks;
-    ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
-                         threadArgs_ar[th_idx]);
-  }
-
-  // Wait for all threads to finish
-  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-    pthread_join(threads[th_idx], NULL);
-  }
-
-  printf("Threads finished\n");
-
-  /* Cleanup */
-  for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-    xsk_socket__delete(xsk_sockets[sockidx]->xsk);
-    xsk_umem__delete(umems[sockidx]->umem);
-  }
-  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-    free(threadArgs_ar[th_idx]);
-  }
-  hashtable_cleanup(hashtable);
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    pthread_spin_destroy(&locks[i].lock);
-  }
-  free(locks);
-
-  return EXIT_OK;
-}
-
-void cleanup_sockets(NUM_SOCKETS) {
-
 }

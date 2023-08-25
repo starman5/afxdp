@@ -1,6 +1,7 @@
 #include "common_hashtable.h"
 
 // Initialize a spinlock for each bucket, for minimal lock contention
+// Return array of spinlocks
 Spinlock* init_spinlocks() {
   void* rawPtr_Spinlock;
   if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
@@ -17,6 +18,7 @@ Spinlock* init_spinlocks() {
   return locks;
 }
 
+// Create, initialize and return hashtable
 HASHTABLE_T init_hashtable() {
   HASHTABLE_T hashtable = (HASHTABLE_T)malloc(TABLE_SIZE * sizeof(Node*));
   for (int i = 0; i < TABLE_SIZE; ++i) {
