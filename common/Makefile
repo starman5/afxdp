@@ -12,6 +12,9 @@ common_params.o: common_params.c common_params.h
 common_user_bpf_xdp.o: common_user_bpf_xdp.c common_user_bpf_xdp.h
 	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
 
+common_hashtable.o: common_hashtable.c common_hashtable.h
+	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
+
 common_af_xdp_lib.o: common_af_xdp_lib.c common_af_xdp_lib.h
 	$(QUIET_CC)$(CC) $(CFLAGS) -c -o $@ $<
 
