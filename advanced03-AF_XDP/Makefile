@@ -10,3 +10,4 @@ include $(COMMON_DIR)/common.mk
 COMMON_OBJS := $(COMMON_DIR)/common_params.o
 COMMON_OBJS += $(COMMON_DIR)/common_user_bpf_xdp.o
 COMMON_OBJS += $(COMMON_DIR)/common_af_xdp_lib.o
+LIB_OBJS := $(COMMON_DIR)/common_af_xdp_lib.o
