@@ -167,11 +167,12 @@ inline uint16_t compute_ip_checksum(struct iphdr* ip) {
 
 bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args,
-                           ProcessFunction func) {
+                           ProcessFunction custom_processing) {
   
-  Node** hashtable = th_args->hashtable;
+  HASHTABLE_T hashtable = th_args->hashtable;
   int idx = th_args->idx;
   Spinlock* locks = th_args->locks;
+  ProcessFunction custom_processing = th_args->custom_processing;
 
   uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
@@ -308,7 +309,7 @@ void rx_and_process(void* args) {
   }
 }
 
-void setup_afxdp(int num_sockets) {
+void start_afxdp(int num_sockets, ProcessFunction custom_processing) {
   int ret;
   void* packet_buffers[num_sockets];
   uint64_t packet_buffer_size;
@@ -371,6 +372,7 @@ void setup_afxdp(int num_sockets) {
     threadArgs_ar[th_idx]->idx = th_idx;
     threadArgs_ar[th_idx]->hashtable = hashtable;
     threadArgs_ar[th_idx]->locks = locks;
+    threadArgs_ar[th_idx]->custom_processing = custom_processing;
     ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
                          threadArgs_ar[th_idx]);
   }
@@ -529,7 +531,7 @@ int main(int argc, char** argv) {
   }
 
   // Initialize the hashtable, which will serve as the in-memory key-value store
-  Node** hashtable = (Node**)malloc(TABLE_SIZE * sizeof(Node*));
+  HASHTABLE_T hashtable = (HASHTABLE_T)malloc(TABLE_SIZE * sizeof(Node*));
   initialize_hashtable(hashtable);
 
   struct threadArgs* threadArgs_ar[NUM_THREADS];
@@ -565,4 +567,8 @@ int main(int argc, char** argv) {
   free(locks);
 
   return EXIT_OK;
+}
+
+void cleanup_sockets(NUM_SOCKETS) {
+
 }

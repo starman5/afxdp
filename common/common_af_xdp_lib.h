@@ -34,6 +34,7 @@
 #include "../common/common_libbpf.h"
 #include "../common/common_params.h"
 #include "../common/common_user_bpf_xdp.h"
+#include "../common/common_hashtable.h"
 
 #define NUM_FRAMES 4096
 #define FRAME_SIZE XSK_UMEM__DEFAULT_FRAME_SIZE
@@ -44,24 +45,20 @@
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
+typedef bool (*ProcessFunction)(uint8_t*);
+
 typedef struct counter {
   uint64_t count;
   char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
 } Counter;
 
-typedef struct spinlock {
-  pthread_spinlock_t lock;
-  char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
-} Spinlock;
-
 struct threadArgs {
   struct xsk_socket_info* xski;
   int idx;
-  Node** hashtable;
+  HASHTABLE_T hashtable;
   Spinlock* locks;
+  ProcessFunction custom_processing;
 };
-
-typedef void (*ProcessFunction)()
 
 static struct xdp_program* prog;
 static int xsk_map_fd;
@@ -174,7 +171,7 @@ void handle_receive_packets(struct threadArgs* th_args);
 
 void rx_and_process(void* args);
 
-void setup_afxdp(int num_sockets);
+void start_afxdp(int num_sockets, ProcessFunction custom_processing);
 
 bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args);

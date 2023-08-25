@@ -1,16 +1,34 @@
 #include "common_hashtable.h"
 
+// Initialize a spinlock for each bucket, for minimal lock contention
+Spinlock* init_spinlocks() {
+  void* rawPtr_Spinlock;
+  if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
+                     TABLE_SIZE * sizeof(Spinlock)) != 0) {
+    perror("posix_memalign error\n");
+    exit(EXIT_FAILURE);
+  }
+  Spinlock* locks = (Spinlock*)rawPtr_Spinlock;
+
+  for (int i = 0; i < TABLE_SIZE; ++i) {
+    pthread_spin_init(&locks[i].lock, PTHREAD_PROCESS_PRIVATE);
+  }
+
+  return locks;
+}
+
+HASHTABLE_T init_hashtable() {
+  HASHTABLE_T hashtable = (HASHTABLE_T)malloc(TABLE_SIZE * sizeof(Node*));
+  for (int i = 0; i < TABLE_SIZE; ++i) {
+    hashtable[i] = NULL;
+  }
+  return hashtable;
+}
 
 // Simple hash function for unsigned integers
 uint64_t hash_key(uint64_t key) { return key % TABLE_SIZE; }
 
-void initialize_hashtable(Node** hashtable) {
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    hashtable[i] = NULL;
-  }
-}
-
-void hashtable_cleanup(Node** hashtable) {
+void cleanup_hashtable(HASHTABLE_T hashtable) {
   for (int i = 0; i < TABLE_SIZE; ++i) {
     Node* head = hashtable[i];
     while (head) {
@@ -22,7 +40,7 @@ void hashtable_cleanup(Node** hashtable) {
   }
 }
 
-void table_set(Node** hashtable, uint64_t key, char* value, Spinlock* locks) {
+void table_set(HASHTABLE_T hashtable, uint64_t key, char* value, Spinlock* locks) {
   uint64_t hash = hash_key(key);
   pthread_spin_lock(&locks[hash].lock);
   Node* head = hashtable[hash];
@@ -51,7 +69,7 @@ void table_set(Node** hashtable, uint64_t key, char* value, Spinlock* locks) {
   pthread_spin_unlock(&locks[hash].lock);
 }
 
-char* table_get(Node** hashtable, uint64_t key, Spinlock* locks) {
+char* table_get(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks) {
   uint64_t hash = hash_key(key);
   pthread_spin_lock(&locks[hash].lock);
   Node* head = hashtable[hash];
@@ -66,7 +84,7 @@ char* table_get(Node** hashtable, uint64_t key, Spinlock* locks) {
   return NULL;
 }
 
-void table_delete(Node** hashtable, uint64_t key, Spinlock* locks) {
+void table_delete(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks) {
   uint64_t hash = hash_key(key);
   pthread_spin_lock(&locks[hash].lock);
   Node* curr = hashtable[hash];

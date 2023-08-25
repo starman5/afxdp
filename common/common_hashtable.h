@@ -17,11 +17,6 @@
 
 #define TABLE_SIZE 7000000
 #define VALUE_SIZE 64
-#define NON 5
-#define SET 6
-#define GET 7
-#define DEL 8
-#define END 9
 
 typedef struct node {
   uint64_t key;
@@ -29,17 +24,27 @@ typedef struct node {
   struct node* next;
 } Node;
 
+typedef HASHTABLE_T Node**;
+
+typedef struct spinlock {
+  pthread_spinlock_t lock;
+  char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
+} Spinlock;
+
+Spinlock* init_spinlocks();
+
+HASHTABLE_T init_hashtable()
 
 uint64_t hash_key(uint64_t key);
 
-void initialize_hashtable(Node** hashtable);
+void initialize_hashtable(HASHTABLE_T hashtable);
 
-void hashtable_cleanup(Node** hashtable);
+void table_set(HASHTABLE_T hashtable, uint64_t key, char* value, Spinlock* locks);
 
-void table_set(Node** hashtable, uint64_t key, char* value, Spinlock* locks);
+char* table_get(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks);
 
-char* table_get(Node** hashtable, uint64_t key, Spinlock* locks);
+void table_delete(HASHTABLE_T** hashtable, uint64_t key, Spinlock* locks);
 
-void table_delete(Node** hashtable, uint64_t key, Spinlock* locks);
+void cleanup_hashtable(HASHTABLE_T hashtable);
 
 #endif

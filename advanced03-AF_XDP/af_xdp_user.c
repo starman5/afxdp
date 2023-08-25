@@ -34,12 +34,18 @@
 #include "../common/common_af_xdp_lib.h"
 
 #define NUM_SOCKETS 1
-#define NUM_THREADS NUM_SOCKETS
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
 
+#define NON 5
+#define SET 6
+#define GET 7
+#define DEL 8
+#define END 9
+
 #define DONT_OPTIMIZE(var) __asm__ __volatile__("" ::"m"(var));
 
+// These are for counting the number of packets processed
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
 Counter countAr[NUM_THREADS];
 
@@ -48,86 +54,7 @@ atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
 
-
-
-#define NANOSEC_PER_SEC 1000000000 /* 10^9 */
-static uint64_t gettime(void) {
-  struct timespec t;
-  int res;
-
-  res = clock_gettime(CLOCK_MONOTONIC, &t);
-  if (res < 0) {
-    fprintf(stderr, "Error with gettimeofday! (%i)\n", res);
-    exit(EXIT_FAIL);
-  }
-  return (uint64_t)t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
-}
-
-static double calc_period(struct stats_record* r, struct stats_record* p) {
-  double period_ = 0;
-  __u64 period = 0;
-
-  period = r->timestamp - p->timestamp;
-  if (period > 0) period_ = ((double)period / NANOSEC_PER_SEC);
-
-  return period_;
-}
-
-static void stats_print(struct stats_record* stats_rec,
-                        struct stats_record* stats_prev) {
-  uint64_t packets, bytes;
-  double period;
-  double pps; /* packets per sec */
-  double bps; /* bits per sec */
-
-  char* fmt =
-      "%-12s %'11lld pkts (%'10.0f pps)"
-      " %'11lld Kbytes (%'6.0f Mbits/s)"
-      " period:%f\n";
-
-  period = calc_period(stats_rec, stats_prev);
-  if (period == 0) period = 1;
-
-  packets = stats_rec->rx_packets - stats_prev->rx_packets;
-  pps = packets / period;
-
-  bytes = stats_rec->rx_bytes - stats_prev->rx_bytes;
-  bps = (bytes * 8) / period / 1000000;
-
-  printf(fmt, "AF_XDP RX:", stats_rec->rx_packets, pps,
-         stats_rec->rx_bytes / 1000, bps, period);
-
-  packets = stats_rec->tx_packets - stats_prev->tx_packets;
-  pps = packets / period;
-
-  bytes = stats_rec->tx_bytes - stats_prev->tx_bytes;
-  bps = (bytes * 8) / period / 1000000;
-
-  printf(fmt, "       TX:", stats_rec->tx_packets, pps,
-         stats_rec->tx_bytes / 1000, bps, period);
-
-  printf("\n");
-}
-
-static void* stats_poll(void* arg) {
-  unsigned int interval = 2;
-  struct xsk_socket_info* xsk = arg;
-  static struct stats_record previous_stats = {0};
-
-  previous_stats.timestamp = gettime();
-
-  /* Trick to pretty printf with thousands separators use %' */
-  setlocale(LC_NUMERIC, "en_US");
-
-  while (!global_exit) {
-    sleep(interval);
-    xsk->stats.timestamp = gettime();
-    stats_print(&xsk->stats, &previous_stats);
-    previous_stats = xsk->stats;
-  }
-  return NULL;
-}
-
+// Executed when signal received to stop
 static void exit_application(int signal) {
   uint64_t npackets = 0;
   for (int i = 0; i < NUM_THREADS; ++i) {
@@ -148,6 +75,8 @@ static void exit_application(int signal) {
   global_exit = true;
 }
 
+// Change this function to suit your needs
+// This is the custom packet processing logic
 bool custom_processing(uint8_t* pkt) {
   int ret;
   uint32_t tx_idx = 0;
@@ -243,18 +172,6 @@ bool custom_processing(uint8_t* pkt) {
 }
 
 int main(int argc, char** argv) {
-  int ret;
-  void* packet_buffers[NUM_SOCKETS];
-  uint64_t packet_buffer_size;
-  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
-  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
-  struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
-  struct xsk_umem_info* umems[NUM_SOCKETS];
-  struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
-  pthread_t stats_poll_thread;
-  int err;
-  char errmsg[1024];
-
   /* Global shutdown handler */
   signal(SIGINT, exit_application);
 
@@ -310,101 +227,20 @@ int main(int argc, char** argv) {
       exit(EXIT_FAILURE);
     }
   }
+  
+  // Initialize the spinlocks for the hashtable
+  Spinlock* spinlocks = init_spinlocks();
 
-  /* Allow unlimited locking of memory, so all memory needed for packet
-   * buffers can be locked.
-   */
-  if (setrlimit(RLIMIT_MEMLOCK, &rlim)) {
-    fprintf(stderr, "ERROR: setrlimit(RLIMIT_MEMLOCK) \"%s\"\n",
-            strerror(errno));
-    exit(EXIT_FAILURE);
-  }
+  // Initialize the hashtable, which will serve as the in-memory key-value store
+  HASHTABLE_T hashtable = init_hashtable();
 
-  /* Allocate memory for NUM_FRAMES of the default XDP frame size */
-  packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
-
-  for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-    // Allocate packet buffer
-    if (posix_memalign(&(packet_buffers[sockidx]),
-                       getpagesize(), /* PAGE_SIZE aligned */
-                       packet_buffer_size)) {
-      fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
-              strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-
-    /* Configure UMEM */
-    umems[sockidx] =
-        configure_xsk_umem(packet_buffers[sockidx], packet_buffer_size);
-    if (umems[sockidx] == NULL) {
-      fprintf(stderr, "ERROR: Can't create umem \"%s\"\n", strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-
-    /* Open and configure the AF_XDP (xsk) sockets */
-    xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], 20 + sockidx);
-    if (xsk_sockets[sockidx] == NULL) {
-      fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
-              strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-  }
-
-  /* Receive and count packets than drop them */
-  pthread_t threads[NUM_THREADS];
-
-  // Initialize a spinlock for each bucket, for minimal lock contention
-  void* rawPtr_Spinlock;
-  if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
-                     TABLE_SIZE * sizeof(Spinlock)) != 0) {
-    perror("posix_memalign error\n");
-    exit(EXIT_FAILURE);
-  }
-  Spinlock* locks = (Spinlock*)rawPtr_Spinlock;
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    pthread_spin_init(&locks[i].lock, PTHREAD_PROCESS_PRIVATE);
-  }
-
-  // Initialize global counter array
+  // Initialize global counter array for our own statistics
   for (int i = 0; i < NUM_THREADS; ++i) {
     countAr[i].count = 0;
   }
 
-  // Initialize the hashtable, which will serve as the in-memory key-value store
-  Node** hashtable = (Node**)malloc(TABLE_SIZE * sizeof(Node*));
-  initialize_hashtable(hashtable);
-
-  struct threadArgs* threadArgs_ar[NUM_THREADS];
-  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-    threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
-    threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
-    threadArgs_ar[th_idx]->idx = th_idx;
-    threadArgs_ar[th_idx]->hashtable = hashtable;
-    threadArgs_ar[th_idx]->locks = locks;
-    ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
-                         threadArgs_ar[th_idx]);
-  }
-
-  // Wait for all threads to finish
-  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-    pthread_join(threads[th_idx], NULL);
-  }
-
-  printf("Threads finished\n");
-
-  /* Cleanup */
-  for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
-    xsk_socket__delete(xsk_sockets[sockidx]->xsk);
-    xsk_umem__delete(umems[sockidx]->umem);
-  }
-  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
-    free(threadArgs_ar[th_idx]);
-  }
-  hashtable_cleanup(hashtable);
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    pthread_spin_destroy(&locks[i].lock);
-  }
-  free(locks);
+  // Start NUM_SOCKETS AF_XDP sockets
+  start_afxdp(NUM_SOCKETS, custom_processing)
 
   return EXIT_OK;
 }
