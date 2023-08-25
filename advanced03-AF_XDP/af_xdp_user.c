@@ -190,6 +190,8 @@ void table_delete(Node** hashtable, uint64_t key, Spinlock* locks) {
 
 static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args) {
+  
+  printf("Proces\n");
   Node** hashtable = th_args->hashtable;
   int idx = th_args->idx;
   Spinlock* locks = th_args->locks;
