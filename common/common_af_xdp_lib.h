@@ -40,8 +40,28 @@
 #define RX_BATCH_SIZE 64
 #define TX_BATCH_SIZE 5
 #define INVALID_UMEM_FRAME UINT64_MAX
+#define CACHE_LINE_SIZE 64
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
+
+typedef struct counter {
+  uint64_t count;
+  char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
+} Counter;
+
+typedef struct spinlock {
+  pthread_spinlock_t lock;
+  char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
+} Spinlock;
+
+struct threadArgs {
+  struct xsk_socket_info* xski;
+  int idx;
+  Node** hashtable;
+  Spinlock* locks;
+};
+
+typedef void (*ProcessFunction)()
 
 static struct xdp_program* prog;
 static int xsk_map_fd;
@@ -77,6 +97,8 @@ struct xsk_socket_info {
   struct stats_record stats;
   struct stats_record prev_stats;
 };
+
+int pin_thread_to_core(int core_id);
 
 __u32 xsk_ring_prod__free(struct xsk_ring_prod* r);
 
@@ -147,5 +169,14 @@ __sum16 csum16_sub(__sum16 csum, __be16 addend);
 void csum_replace2(__sum16* sum, __be16 old, __be16 new);
 
 uint16_t compute_ip_checksum(struct iphdr* ip);
+
+void handle_receive_packets(struct threadArgs* th_args);
+
+void rx_and_process(void* args);
+
+void setup_afxdp(int num_sockets);
+
+bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
+                           uint32_t len, struct threadArgs* th_args);
 
 #endif

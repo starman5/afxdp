@@ -33,388 +33,21 @@
 #include "../common/common_user_bpf_xdp.h"
 #include "../common/common_af_xdp_lib.h"
 
-#define VALUE_SIZE 64
-
 #define NUM_SOCKETS 1
 #define NUM_THREADS NUM_SOCKETS
-#define TIMEOUT_NSEC 500000000
-#define CACHE_LINE_SIZE 64
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
-#define MAX_BUFFER_SIZE 1500
-#define TABLE_SIZE 7000000
-
-#define NON 5
-#define SET 6
-#define GET 7
-#define DEL 8
-#define END 9
 
 #define DONT_OPTIMIZE(var) __asm__ __volatile__("" ::"m"(var));
 
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
+Counter countAr[NUM_THREADS];
+
+// These are for defunct polling logic
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
 
-
-typedef struct node {
-  uint64_t key;
-  char* value;
-  struct node* next;
-} Node;
-
-typedef struct counter {
-  uint64_t count;
-  char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
-} Counter;
-
-typedef struct spinlock {
-  pthread_spinlock_t lock;
-  char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
-} Spinlock;
-
-struct threadArgs {
-  struct xsk_socket_info* xski;
-  int idx;
-  Node** hashtable;
-  Spinlock* locks;
-};
-
-Counter countAr[NUM_THREADS];
-
-// Convenient wrapper to pin a thread to a core
-int pin_thread_to_core(int core_id) {
-  cpu_set_t cpuset;
-  CPU_ZERO(&cpuset);
-  CPU_SET(core_id, &cpuset);
-
-  return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-}
-
-// Simple hash function for unsigned integers
-uint64_t hash_key(uint64_t key) { return key % TABLE_SIZE; }
-
-void initialize_hashtable(Node** hashtable) {
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    hashtable[i] = NULL;
-  }
-}
-
-void hashtable_cleanup(Node** hashtable) {
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    Node* head = hashtable[i];
-    while (head) {
-      Node* tmp = head;
-      head = head->next;
-      free(tmp->value);
-      free(tmp);
-    }
-  }
-}
-
-void table_set(Node** hashtable, uint64_t key, char* value, Spinlock* locks) {
-  uint64_t hash = hash_key(key);
-  pthread_spin_lock(&locks[hash].lock);
-  Node* head = hashtable[hash];
-
-  // Look for key in hashtable
-  bool found = false;
-  while (head) {
-    if (head->key == key) {
-      head->value = value;
-      found = true;
-      break;
-    }
-    head = head->next;
-  }
-  if (found) {
-    pthread_spin_unlock(&locks[hash].lock);
-    return;
-  }
-
-  // If we didn't find the key, then add new node to head of linked list in O(1)
-  Node* new_node = malloc(sizeof(Node));
-  new_node->next = hashtable[hash];
-  new_node->key = key;
-  new_node->value = value;
-  hashtable[hash] = new_node;
-  pthread_spin_unlock(&locks[hash].lock);
-}
-
-char* table_get(Node** hashtable, uint64_t key, Spinlock* locks) {
-  uint64_t hash = hash_key(key);
-  pthread_spin_lock(&locks[hash].lock);
-  Node* head = hashtable[hash];
-  while (head) {
-    if (head->key == key) {
-      pthread_spin_unlock(&locks[hash].lock);
-      return head->value;
-    }
-    head = head->next;
-  }
-  pthread_spin_unlock(&locks[hash].lock);
-  return NULL;
-}
-
-void table_delete(Node** hashtable, uint64_t key, Spinlock* locks) {
-  uint64_t hash = hash_key(key);
-  pthread_spin_lock(&locks[hash].lock);
-  Node* curr = hashtable[hash];
-  Node* prev = curr;
-  if (!curr) {
-    printf("Cannot delete from empty list\n");
-  }
-
-  // Delete first node in linked list
-  if (curr->key == key) {
-    hashtable[hash] = curr->next;
-    pthread_spin_unlock(&locks[hash].lock);
-    return;
-  }
-
-  curr = curr->next;
-  while (curr) {
-    if (curr->key == key) {
-      prev->next = curr->next;
-      free(curr);
-      pthread_spin_unlock(&locks[hash].lock);
-      return;
-    }
-
-    curr = curr->next;
-    prev = prev->next;
-  }
-  pthread_spin_unlock(&locks[hash].lock);
-}
-
-static bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
-                           uint32_t len, struct threadArgs* th_args) {
-  
-  Node** hashtable = th_args->hashtable;
-  int idx = th_args->idx;
-  Spinlock* locks = th_args->locks;
-
-  uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
-
-  int ret;
-  uint32_t tx_idx = 0;
-  uint8_t tmp_mac[ETH_ALEN];
-  uint32_t tmp_ip;
-  struct ethhdr* eth = (struct ethhdr*)pkt;
-  struct iphdr* iph = (struct iphdr*)(eth + 1);
-  struct udphdr* udph = NULL;
-  if (ntohs(eth->h_proto) != ETH_P_IP) return false;
-
-  // Retrieve payload
-  unsigned char* ip_data = (unsigned char*)iph + (iph->ihl << 2);
-  udph = (struct udphdr*)ip_data;
-  unsigned char* payload_data = ip_data + sizeof(struct udphdr);
-
-  // Process request
-  char* special_message = NULL;
-  const char* default_message = "Message received";
-
-  uint8_t comm = *(uint8_t*)payload_data;
-  uint32_t key = *(uint32_t*)&payload_data[1];
-  char* value_get = NULL;
-
-  // Process message from the client
-  switch (comm) {
-    case NON:
-      break;
-
-    case SET: {
-      char* value = (char*)malloc(VALUE_SIZE);
-      // Get the value
-      memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
-             VALUE_SIZE);
-      table_set(hashtable, key, value, locks);
-      countAr[idx].count += 1;
-      break;
-    }
-
-    case GET: {
-      value_get = table_get(hashtable, key, locks);
-#if VALUE_SIZE == 0
-      DONT_OPTIMIZE(value_get);
-#else
-      memcpy(payload_data, value_get, VALUE_SIZE);
-#endif
-      countAr[idx].count += 1;
-      break;
-    }
-
-    case DEL: {
-      table_delete(hashtable, key, locks);
-      break;
-    }
-
-    case END: {
-      uint64_t total_count = 0;
-      for (int i = 0; i < NUM_THREADS; ++i) {
-        // @yangzhou, thread-safety issues
-        total_count += countAr[i].count;
-        printf("thread %d: %ld\n", i, countAr[i].count);
-      }
-      // Get the total number of processed requests and send back to user
-      memcpy(payload_data, (void*)&total_count, sizeof(uint64_t));
-      break;
-    }
-
-    default: {
-      special_message = "Not found";
-      memcpy(payload_data, special_message, strlen(special_message));
-    }
-  }
-
-  // Swap source and destination MAC
-  memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
-  memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
-  memcpy(eth->h_source, tmp_mac, ETH_ALEN);
-
-  // Swap source and destination IP
-  tmp_ip = iph->saddr;
-  iph->saddr = iph->daddr;
-  iph->daddr = tmp_ip;
-
-  // Swap source and destination port
-  uint16_t tmp = udph->source;
-  udph->source = udph->dest;
-  udph->dest = tmp;
-
-  // Causing transmission erros, but why?
-  // iph->check = compute_ip_checksum(iph);
-  udph->check = 0;
-
-  /* Here we sent the packet out of the receive port. Note that
-   * we allocate one entry and schedule it. Your design would be
-   * faster if you do batch processing/transmission */
-
-  ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
-  if (ret != 1) {
-    printf("no more transmit slots\n");
-    /* No more transmit slots, drop the packet */
-    return false;
-  }
-
-  xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
-  xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
-
-  //++num_tx_packets;
-  // if (num_tx_packets >= TX_BATCH_SIZE) {
-  xsk_ring_prod__submit(&xsk->tx, 1);
-  xsk->outstanding_tx += 1;
-  // num_tx_packets = 0;
-  //}
-
-  xsk->stats.tx_bytes += len;
-  xsk->stats.tx_packets++;
-  return true;
-}
-
-static void handle_receive_packets(struct threadArgs* th_args) {
-  struct xsk_socket_info* xsk = th_args->xski;
-  int idx = th_args->idx;
-
-  unsigned int rcvd, stock_frames, i;
-  uint32_t idx_rx = 0, idx_fq = 0;
-  int ret;
-
-  // Check if there is something to consume at all
-
-  rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
-  if (!rcvd) return;
-
-  // atomic_fetch_add(&num_ready, 1);
-  /* Stuff the ring with as much frames as possible */
-  stock_frames = xsk_prod_nb_free(&xsk->umem->fq, xsk_umem_free_frames(xsk));
-
-  if (stock_frames > 0) {
-    ret = xsk_ring_prod__reserve(&xsk->umem->fq, stock_frames, &idx_fq);
-    /* This should not happen, but just in case */
-    while (ret != stock_frames)
-      ret = xsk_ring_prod__reserve(&xsk->umem->fq, rcvd, &idx_fq);
-
-    for (i = 0; i < stock_frames; i++)
-      *xsk_ring_prod__fill_addr(&xsk->umem->fq, idx_fq++) =
-          xsk_alloc_umem_frame(xsk);
-
-    xsk_ring_prod__submit(&xsk->umem->fq, stock_frames);
-  }
-
-  /* Process received packets */
-  for (i = 0; i < rcvd; i++) {
-    uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
-    uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
-
-    if (!process_packet(xsk, addr, len, th_args)) {
-      printf("Couldn't send!\n");
-      xsk_free_umem_frame(xsk, addr);
-    }
-    xsk->stats.rx_bytes += len;
-  }
-
-  xsk_ring_cons__release(&xsk->rx, rcvd);
-  xsk->stats.rx_packets += rcvd;
-
-  /* Do we need to wake up the kernel for transmission */
-  complete_tx(xsk);
-
-  // Reset timeout start
-  clock_gettime(CLOCK_MONOTONIC, &timeout_start);
-}
-
-static void rx_and_process(void* args) {
-  struct threadArgs* th_args = (struct threadArgs*)args;
-  struct xsk_socket_info* xski = th_args->xski;
-  int idx = th_args->idx;
-
-  struct timespec timeout_end;
-  struct timespec timeout_elapsed;
-
-  if (pin_thread_to_core(idx) != 0) {
-    perror("Could not pin thread to core\n");
-    exit(EXIT_FAILURE);
-  }
-
-  struct pollfd fds[1];
-  int ret = 1;
-  int nfds = 1;
-
-  memset(fds, 0, sizeof(fds));
-  fds[0].fd = xsk_socket__fd(xski->xsk);
-  fds[0].events = POLLIN;
-
-  while (!global_exit) {
-    if (cfg.xsk_poll_mode) {
-      // ret = poll(fds, nfds, -1);
-      ret = poll(fds, nfds, 1);
-      handle_receive_packets(th_args);
-    } else {
-      handle_receive_packets(th_args);
-    }
-    // Check timeout
-    /*if (num_tx_packets > 0) {
-            clock_gettime(CLOCK_MONOTONIC, &timeout_end);
-            timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
-            if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
-                    timeout_elapsed.tv_nsec = timeout_end.tv_nsec -
-    timeout_start.tv_nsec; } else { timeout_elapsed_time.tv_sec--;
-                    timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec -
-    start_time.tv_nsec;
-            }
-
-            if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
-                    printf("timeout\n");
-                    xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-                    xsk->outstanding_tx += num_tx_packets;
-                    num_tx_packets = 0;
-                    complete_tx(xsk);
-            }
-    }*/
-  }
-}
 
 
 #define NANOSEC_PER_SEC 1000000000 /* 10^9 */
@@ -513,6 +146,100 @@ static void exit_application(int signal) {
 
   signal = signal;
   global_exit = true;
+}
+
+bool custom_processing(uint8_t* pkt) {
+  int ret;
+  uint32_t tx_idx = 0;
+  uint8_t tmp_mac[ETH_ALEN];
+  uint32_t tmp_ip;
+  struct ethhdr* eth = (struct ethhdr*)pkt;
+  struct iphdr* iph = (struct iphdr*)(eth + 1);
+  struct udphdr* udph = NULL;
+  if (ntohs(eth->h_proto) != ETH_P_IP) return false;
+
+  // Retrieve payload
+  unsigned char* ip_data = (unsigned char*)iph + (iph->ihl << 2);
+  udph = (struct udphdr*)ip_data;
+  unsigned char* payload_data = ip_data + sizeof(struct udphdr);
+
+  // Process request
+  char* special_message = NULL;
+  const char* default_message = "Message received";
+
+  uint8_t comm = *(uint8_t*)payload_data;
+  uint32_t key = *(uint32_t*)&payload_data[1];
+  char* value_get = NULL;
+
+  // Process message from the client
+  switch (comm) {
+    case NON:
+      break;
+
+    case SET: {
+      char* value = (char*)malloc(VALUE_SIZE);
+      // Get the value
+      memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
+             VALUE_SIZE);
+      table_set(hashtable, key, value, locks);
+      countAr[idx].count += 1;
+      break;
+    }
+
+    case GET: {
+      value_get = table_get(hashtable, key, locks);
+#if VALUE_SIZE == 0
+      DONT_OPTIMIZE(value_get);
+#else
+      memcpy(payload_data, value_get, VALUE_SIZE);
+#endif
+      countAr[idx].count += 1;
+      break;
+    }
+
+    case DEL: {
+      table_delete(hashtable, key, locks);
+      break;
+    }
+
+    case END: {
+      uint64_t total_count = 0;
+      for (int i = 0; i < NUM_THREADS; ++i) {
+        // @yangzhou, thread-safety issues
+        total_count += countAr[i].count;
+        printf("thread %d: %ld\n", i, countAr[i].count);
+      }
+      // Get the total number of processed requests and send back to user
+      memcpy(payload_data, (void*)&total_count, sizeof(uint64_t));
+      break;
+    }
+
+    default: {
+      special_message = "Not found";
+      memcpy(payload_data, special_message, strlen(special_message));
+    }
+  }
+
+  // Swap source and destination MAC
+  memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
+  memcpy(eth->h_dest, eth->h_source, ETH_ALEN);
+  memcpy(eth->h_source, tmp_mac, ETH_ALEN);
+
+  // Swap source and destination IP
+  tmp_ip = iph->saddr;
+  iph->saddr = iph->daddr;
+  iph->daddr = tmp_ip;
+
+  // Swap source and destination port
+  uint16_t tmp = udph->source;
+  udph->source = udph->dest;
+  udph->dest = tmp;
+
+  // Causing transmission erros, but why?
+  // iph->check = compute_ip_checksum(iph);
+  udph->check = 0;
+
+  return true;
 }
 
 int main(int argc, char** argv) {

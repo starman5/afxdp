@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "condition_variable": "c"
+        "condition_variable": "c",
+        "common_af_xdp_lib.h": "c"
     }
 }

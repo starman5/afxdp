@@ -1,4 +1,14 @@
 #include "common_af_xdp_lib.h"
+#include "common_hashtable.h"
+
+// Convenient wrapper to pin a thread to a core
+int pin_thread_to_core(int core_id) {
+  cpu_set_t cpuset;
+  CPU_ZERO(&cpuset);
+  CPU_SET(core_id, &cpuset);
+
+  return pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+}
 
 inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r) {
   r->cached_cons = *r->consumer + r->size;
@@ -153,4 +163,406 @@ inline uint16_t compute_ip_checksum(struct iphdr* ip) {
   }
 
   return ~((csum & 0xffff) + (csum >> 16));
+}
+
+bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
+                           uint32_t len, struct threadArgs* th_args,
+                           ProcessFunction func) {
+  
+  Node** hashtable = th_args->hashtable;
+  int idx = th_args->idx;
+  Spinlock* locks = th_args->locks;
+
+  uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
+
+  if (!custom_processing(pkt)) {
+    return false;
+  }
+
+  /* Here we sent the packet out of the receive port. Note that
+   * we allocate one entry and schedule it. Your design would be
+   * faster if you do batch processing/transmission */
+
+  ret = xsk_ring_prod__reserve(&xsk->tx, 1, &tx_idx);
+  if (ret != 1) {
+    printf("no more transmit slots\n");
+    /* No more transmit slots, drop the packet */
+    return false;
+  }
+
+  xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->addr = addr;
+  xsk_ring_prod__tx_desc(&xsk->tx, tx_idx)->len = len;
+
+  //++num_tx_packets;
+  // if (num_tx_packets >= TX_BATCH_SIZE) {
+  xsk_ring_prod__submit(&xsk->tx, 1);
+  xsk->outstanding_tx += 1;
+  // num_tx_packets = 0;
+  //}
+
+  xsk->stats.tx_bytes += len;
+  xsk->stats.tx_packets++;
+  return true;
+}
+
+void handle_receive_packets(struct threadArgs* th_args) {
+  struct xsk_socket_info* xsk = th_args->xski;
+  int idx = th_args->idx;
+
+  unsigned int rcvd, stock_frames, i;
+  uint32_t idx_rx = 0, idx_fq = 0;
+  int ret;
+
+  // Check if there is something to consume at all
+
+  rcvd = xsk_ring_cons__peek(&xsk->rx, RX_BATCH_SIZE, &idx_rx);
+  if (!rcvd) return;
+
+  // atomic_fetch_add(&num_ready, 1);
+  /* Stuff the ring with as much frames as possible */
+  stock_frames = xsk_prod_nb_free(&xsk->umem->fq, xsk_umem_free_frames(xsk));
+
+  if (stock_frames > 0) {
+    ret = xsk_ring_prod__reserve(&xsk->umem->fq, stock_frames, &idx_fq);
+    /* This should not happen, but just in case */
+    while (ret != stock_frames)
+      ret = xsk_ring_prod__reserve(&xsk->umem->fq, rcvd, &idx_fq);
+
+    for (i = 0; i < stock_frames; i++)
+      *xsk_ring_prod__fill_addr(&xsk->umem->fq, idx_fq++) =
+          xsk_alloc_umem_frame(xsk);
+
+    xsk_ring_prod__submit(&xsk->umem->fq, stock_frames);
+  }
+
+  /* Process received packets */
+  for (i = 0; i < rcvd; i++) {
+    uint64_t addr = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx)->addr;
+    uint32_t len = xsk_ring_cons__rx_desc(&xsk->rx, idx_rx++)->len;
+
+    if (!process_packet(xsk, addr, len, th_args)) {
+      printf("Couldn't send!\n");
+      xsk_free_umem_frame(xsk, addr);
+    }
+    xsk->stats.rx_bytes += len;
+  }
+
+  xsk_ring_cons__release(&xsk->rx, rcvd);
+  xsk->stats.rx_packets += rcvd;
+
+  /* Do we need to wake up the kernel for transmission */
+  complete_tx(xsk);
+
+  // Reset timeout start
+  clock_gettime(CLOCK_MONOTONIC, &timeout_start);
+}
+
+void rx_and_process(void* args) {
+  struct threadArgs* th_args = (struct threadArgs*)args;
+  struct xsk_socket_info* xski = th_args->xski;
+  int idx = th_args->idx;
+
+  struct timespec timeout_end;
+  struct timespec timeout_elapsed;
+
+  if (pin_thread_to_core(idx) != 0) {
+    perror("Could not pin thread to core\n");
+    exit(EXIT_FAILURE);
+  }
+
+  struct pollfd fds[1];
+  int ret = 1;
+  int nfds = 1;
+
+  memset(fds, 0, sizeof(fds));
+  fds[0].fd = xsk_socket__fd(xski->xsk);
+  fds[0].events = POLLIN;
+
+  while (!global_exit) {
+    if (cfg.xsk_poll_mode) {
+      // ret = poll(fds, nfds, -1);
+      ret = poll(fds, nfds, 1);
+      handle_receive_packets(th_args);
+    } else {
+      handle_receive_packets(th_args);
+    }
+    // Check timeout
+    /*if (num_tx_packets > 0) {
+            clock_gettime(CLOCK_MONOTONIC, &timeout_end);
+            timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
+            if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
+                    timeout_elapsed.tv_nsec = timeout_end.tv_nsec -
+    timeout_start.tv_nsec; } else { timeout_elapsed_time.tv_sec--;
+                    timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec -
+    start_time.tv_nsec;
+            }
+
+            if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
+                    printf("timeout\n");
+                    xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
+                    xsk->outstanding_tx += num_tx_packets;
+                    num_tx_packets = 0;
+                    complete_tx(xsk);
+            }
+    }*/
+  }
+}
+
+void setup_afxdp(int num_sockets) {
+  int ret;
+  void* packet_buffers[num_sockets];
+  uint64_t packet_buffer_size;
+  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
+  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
+  struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
+  struct xsk_umem_info* umems[num_sockets];
+  struct xsk_socket_info* xsk_sockets[num_sockets];
+  pthread_t stats_poll_thread;
+  int err;
+  char errmsg[1024];
+
+  /* Allow unlimited locking of memory, so all memory needed for packet
+   * buffers can be locked.
+   */
+  if (setrlimit(RLIMIT_MEMLOCK, &rlim)) {
+    fprintf(stderr, "ERROR: setrlimit(RLIMIT_MEMLOCK) \"%s\"\n",
+            strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  /* Allocate memory for NUM_FRAMES of the default XDP frame size */
+  packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
+
+  for (int sockidx = 0; sockidx < num_sockets; ++sockidx) {
+    // Allocate packet buffer
+    if (posix_memalign(&(packet_buffers[sockidx]),
+                       getpagesize(), /* PAGE_SIZE aligned */
+                       packet_buffer_size)) {
+      fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
+              strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+
+    /* Configure UMEM */
+    umems[sockidx] =
+        configure_xsk_umem(packet_buffers[sockidx], packet_buffer_size);
+    if (umems[sockidx] == NULL) {
+      fprintf(stderr, "ERROR: Can't create umem \"%s\"\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+
+    /* Open and configure the AF_XDP (xsk) sockets */
+    // TODO: addition of 20 only for -z flag
+    xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], 20 + sockidx);
+    if (xsk_sockets[sockidx] == NULL) {
+      fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
+              strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  /* Receive and count packets than drop them */
+  pthread_t threads[num_sockets];
+
+  struct threadArgs* threadArgs_ar[num_sockets];
+  for (int th_idx = 0; th_idx < num_sockets; ++th_idx) {
+    threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
+    threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
+    threadArgs_ar[th_idx]->idx = th_idx;
+    threadArgs_ar[th_idx]->hashtable = hashtable;
+    threadArgs_ar[th_idx]->locks = locks;
+    ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
+                         threadArgs_ar[th_idx]);
+  }
+
+  // Wait for all threads to finish
+  for (int th_idx = 0; th_idx < num_sockets; ++th_idx) {
+    pthread_join(threads[th_idx], NULL);
+  }
+
+  printf("Threads finished\n");
+
+    /* Cleanup */
+  for (int sockidx = 0; sockidx < num_sockets; ++sockidx) {
+    xsk_socket__delete(xsk_sockets[sockidx]->xsk);
+    xsk_umem__delete(umems[sockidx]->umem);
+  }
+  for (int th_idx = 0; th_idx < num_sockets; ++th_idx) {
+    free(threadArgs_ar[th_idx]);
+  }
+  hashtable_cleanup(hashtable);
+  for (int i = 0; i < TABLE_SIZE; ++i) {
+    pthread_spin_destroy(&locks[i].lock);
+  }
+  free(locks);
+
+  return EXIT_OK;
+}
+
+
+int main(int argc, char** argv) {
+  int ret;
+  void* packet_buffers[NUM_SOCKETS];
+  uint64_t packet_buffer_size;
+  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
+  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
+  struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
+  struct xsk_umem_info* umems[NUM_SOCKETS];
+  struct xsk_socket_info* xsk_sockets[NUM_SOCKETS];
+  pthread_t stats_poll_thread;
+  int err;
+  char errmsg[1024];
+
+  /* Global shutdown handler */
+  signal(SIGINT, exit_application);
+
+  /* Cmdline options can change progname */
+  parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
+
+  /* Required option */
+  if (cfg.ifindex == -1) {
+    fprintf(stderr, "ERROR: Required option --dev missing\n\n");
+    usage(argv[0], __doc__, long_options, (argc == 1));
+    return EXIT_FAIL_OPTION;
+  }
+
+  /* Load custom program if configured */
+  if (cfg.filename[0] != 0) {
+    struct bpf_map* map;
+
+    custom_xsk = true;
+    xdp_opts.open_filename = cfg.filename;
+    xdp_opts.prog_name = cfg.progname;
+    xdp_opts.opts = &opts;
+
+    if (cfg.progname[0] != 0) {
+      xdp_opts.open_filename = cfg.filename;
+      xdp_opts.prog_name = cfg.progname;
+      xdp_opts.opts = &opts;
+
+      prog = xdp_program__create(&xdp_opts);
+    } else {
+      prog = xdp_program__open_file(cfg.filename, NULL, &opts);
+    }
+    err = libxdp_get_error(prog);
+    if (err) {
+      libxdp_strerror(err, errmsg, sizeof(errmsg));
+      fprintf(stderr, "ERR: loading program: %s\n", errmsg);
+      return err;
+    }
+
+    err = xdp_program__attach(prog, cfg.ifindex, cfg.attach_mode, 0);
+    if (err) {
+      libxdp_strerror(err, errmsg, sizeof(errmsg));
+      fprintf(stderr, "Couldn't attach XDP program on iface '%s' : %s (%d)\n",
+              cfg.ifname, errmsg, err);
+      return err;
+    }
+
+    /* We also need to load the xsks_map */
+    map = bpf_object__find_map_by_name(xdp_program__bpf_obj(prog), "xsks_map");
+    xsk_map_fd = bpf_map__fd(map);
+    printf("correct xsk_map_fd: %d\n", xsk_map_fd);
+    if (xsk_map_fd < 0) {
+      fprintf(stderr, "ERROR: no xsks map found: %s\n", strerror(xsk_map_fd));
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  /* Allow unlimited locking of memory, so all memory needed for packet
+   * buffers can be locked.
+   */
+  if (setrlimit(RLIMIT_MEMLOCK, &rlim)) {
+    fprintf(stderr, "ERROR: setrlimit(RLIMIT_MEMLOCK) \"%s\"\n",
+            strerror(errno));
+    exit(EXIT_FAILURE);
+  }
+
+  /* Allocate memory for NUM_FRAMES of the default XDP frame size */
+  packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
+
+  for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+    // Allocate packet buffer
+    if (posix_memalign(&(packet_buffers[sockidx]),
+                       getpagesize(), /* PAGE_SIZE aligned */
+                       packet_buffer_size)) {
+      fprintf(stderr, "ERROR: Can't allocate buffer memory \"%s\"\n",
+              strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+
+    /* Configure UMEM */
+    umems[sockidx] =
+        configure_xsk_umem(packet_buffers[sockidx], packet_buffer_size);
+    if (umems[sockidx] == NULL) {
+      fprintf(stderr, "ERROR: Can't create umem \"%s\"\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+
+    /* Open and configure the AF_XDP (xsk) sockets */
+    xsk_sockets[sockidx] = xsk_configure_socket(&cfg, umems[sockidx], 20 + sockidx);
+    if (xsk_sockets[sockidx] == NULL) {
+      fprintf(stderr, "ERROR: Can't setup AF_XDP socket \"%s\"\n",
+              strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  /* Receive and count packets than drop them */
+  pthread_t threads[NUM_THREADS];
+
+  // Initialize a spinlock for each bucket, for minimal lock contention
+  void* rawPtr_Spinlock;
+  if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
+                     TABLE_SIZE * sizeof(Spinlock)) != 0) {
+    perror("posix_memalign error\n");
+    exit(EXIT_FAILURE);
+  }
+  Spinlock* locks = (Spinlock*)rawPtr_Spinlock;
+  for (int i = 0; i < TABLE_SIZE; ++i) {
+    pthread_spin_init(&locks[i].lock, PTHREAD_PROCESS_PRIVATE);
+  }
+
+  // Initialize global counter array
+  for (int i = 0; i < NUM_THREADS; ++i) {
+    countAr[i].count = 0;
+  }
+
+  // Initialize the hashtable, which will serve as the in-memory key-value store
+  Node** hashtable = (Node**)malloc(TABLE_SIZE * sizeof(Node*));
+  initialize_hashtable(hashtable);
+
+  struct threadArgs* threadArgs_ar[NUM_THREADS];
+  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+    threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
+    threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
+    threadArgs_ar[th_idx]->idx = th_idx;
+    threadArgs_ar[th_idx]->hashtable = hashtable;
+    threadArgs_ar[th_idx]->locks = locks;
+    ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
+                         threadArgs_ar[th_idx]);
+  }
+
+  // Wait for all threads to finish
+  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+    pthread_join(threads[th_idx], NULL);
+  }
+
+  printf("Threads finished\n");
+
+  /* Cleanup */
+  for (int sockidx = 0; sockidx < NUM_SOCKETS; ++sockidx) {
+    xsk_socket__delete(xsk_sockets[sockidx]->xsk);
+    xsk_umem__delete(umems[sockidx]->umem);
+  }
+  for (int th_idx = 0; th_idx < NUM_THREADS; ++th_idx) {
+    free(threadArgs_ar[th_idx]);
+  }
+  hashtable_cleanup(hashtable);
+  for (int i = 0; i < TABLE_SIZE; ++i) {
+    pthread_spin_destroy(&locks[i].lock);
+  }
+  free(locks);
+
+  return EXIT_OK;
 }
