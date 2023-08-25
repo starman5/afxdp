@@ -34,7 +34,6 @@
 #include "../common/common_libbpf.h"
 #include "../common/common_params.h"
 #include "../common/common_user_bpf_xdp.h"
-#include "../common/common_hashtable.h"
 
 #define NUM_FRAMES 4096
 #define FRAME_SIZE XSK_UMEM__DEFAULT_FRAME_SIZE
@@ -43,6 +42,24 @@
 #define INVALID_UMEM_FRAME UINT64_MAX
 
 #define MAX_PACKET_LEN XSK_UMEM__DEFAULT_FRAME_SIZE
+
+#define TABLE_SIZE 7000000
+#define VALUE_SIZE 64
+#define CACHE_LINE_SIZE 64
+
+typedef struct node {
+  uint64_t key;
+  char* value;
+  struct node* next;
+} Node;
+
+typedef Node** HASHTABLE_T;
+
+typedef struct spinlock {
+  pthread_spinlock_t lock;
+  char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
+} Spinlock;
+
 
 typedef bool (*ProcessFunction)(uint8_t*);
 
@@ -93,6 +110,30 @@ struct xsk_socket_info {
   struct stats_record stats;
   struct stats_record prev_stats;
 };
+
+/*
+Spinlock and Hashtable
+*/
+
+Spinlock* init_spinlocks();
+
+HASHTABLE_T init_hashtable()
+
+uint64_t hash_key(uint64_t key);
+
+void initialize_hashtable(HASHTABLE_T hashtable);
+
+void table_set(HASHTABLE_T hashtable, uint64_t key, char* value, Spinlock* locks);
+
+char* table_get(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks);
+
+void table_delete(HASHTABLE_T** hashtable, uint64_t key, Spinlock* locks);
+
+void cleanup_hashtable(HASHTABLE_T hashtable);
+
+/*
+AF_XDP logic
+*/
 
 int pin_thread_to_core(int core_id);
 
