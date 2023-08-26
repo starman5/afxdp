@@ -229,11 +229,6 @@ int main(int argc, char** argv) {
   // Initialize the hashtable, which will serve as the in-memory key-value store
   HASHTABLE_T hashtable = init_hashtable();
 
-  // Initialize global counter array for our own statistics
-  for (int i = 0; i < NUM_SOCKETS; ++i) {
-    countAr[i].count = 0;
-  }
-
   // Start NUM_SOCKETS AF_XDP sockets
   start_afxdp(NUM_SOCKETS, custom_processing, locks, hashtable);
 
