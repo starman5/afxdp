@@ -1,5 +1,28 @@
 #include "common_af_xdp_lib.h"
 
+static bool global_exit;
+
+// Executed when signal received to stop
+static void exit_application(int signal) {
+  uint64_t npackets = 0;
+  for (int i = 0; i < NUM_SOCKETS; ++i) {
+    printf("thread %d: %d\n", i, countAr[i].count);
+    npackets += countAr[i].count;
+  }
+  printf("total packets: %d\n", npackets);
+  int err;
+
+  cfg.unload_all = true;
+  err = do_unload(&cfg);
+  if (err) {
+    fprintf(stderr, "Couldn't detach XDP program on iface '%s' : (%d)\n",
+            cfg.ifname, err);
+  }
+
+  signal = signal;
+  global_exit = true;
+}
+
 Spinlock* init_spinlocks() {
   void* rawPtr_Spinlock;
   if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
@@ -290,7 +313,9 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   int idx = th_args->idx;
   Spinlock* locks = th_args->locks;
   ProcessFunction custom_processing = th_args->custom_processing;
-
+  
+  int ret;
+  uint32_t tx_idx = 0;
   uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
   if (!custom_processing(pkt)) {
@@ -370,9 +395,6 @@ void handle_receive_packets(struct threadArgs* th_args) {
 
   /* Do we need to wake up the kernel for transmission */
   complete_tx(xsk);
-
-  // Reset timeout start
-  clock_gettime(CLOCK_MONOTONIC, &timeout_start);
 }
 
 void rx_and_process(void* args) {
@@ -404,29 +426,13 @@ void rx_and_process(void* args) {
     } else {
       handle_receive_packets(th_args);
     }
-    // Check timeout
-    /*if (num_tx_packets > 0) {
-            clock_gettime(CLOCK_MONOTONIC, &timeout_end);
-            timeout_elapsed.tv_sec = timeout_end.tv_sec - timeout_start.tv_sec;
-            if (timeout_end.tv_nsec >= timeout_start.tv_nsec) {
-                    timeout_elapsed.tv_nsec = timeout_end.tv_nsec -
-    timeout_start.tv_nsec; } else { timeout_elapsed_time.tv_sec--;
-                    timeout_elapsed.tv_nsec = 1000000000 + end_time.tv_nsec -
-    start_time.tv_nsec;
-            }
-
-            if (timeout_elapsed.tv_nsec >= TIMEOUT_NSEC) {
-                    printf("timeout\n");
-                    xsk_ring_prod__submit(&xsk->tx, num_tx_packets);
-                    xsk->outstanding_tx += num_tx_packets;
-                    num_tx_packets = 0;
-                    complete_tx(xsk);
-            }
-    }*/
   }
 }
 
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
+    /* Global shutdown handler */
+  signal(SIGINT, exit_application);
+  
   int ret;
   void* packet_buffers[num_sockets];
   uint64_t packet_buffer_size;

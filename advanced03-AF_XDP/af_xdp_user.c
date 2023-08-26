@@ -56,8 +56,6 @@ static const struct option_wrapper long_options[] = {
 
     {{0, 0, NULL, 0}, NULL, false}};
 
-static bool global_exit;
-
 // These are for counting the number of packets processed, returned when signal received
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
 Counter countAr[NUM_SOCKETS];
@@ -66,27 +64,6 @@ Counter countAr[NUM_SOCKETS];
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
-
-// Executed when signal received to stop
-static void exit_application(int signal) {
-  uint64_t npackets = 0;
-  for (int i = 0; i < NUM_SOCKETS; ++i) {
-    printf("thread %d: %d\n", i, countAr[i].count);
-    npackets += countAr[i].count;
-  }
-  printf("total packets: %d\n", npackets);
-  int err;
-
-  cfg.unload_all = true;
-  err = do_unload(&cfg);
-  if (err) {
-    fprintf(stderr, "Couldn't detach XDP program on iface '%s' : (%d)\n",
-            cfg.ifname, err);
-  }
-
-  signal = signal;
-  global_exit = true;
-}
 
 //*********************************************************************
 //******************** Mandatory AF_XDP Logic *************************
@@ -99,7 +76,6 @@ It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
 bool custom_processing(uint8_t* pkt) {
-  int ret;
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
@@ -195,9 +171,6 @@ bool custom_processing(uint8_t* pkt) {
 int main(int argc, char** argv) {
   int err;
   char errmsg[1024];
-
-  /* Global shutdown handler */
-  signal(SIGINT, exit_application);
 
   /* Cmdline options */
   parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
