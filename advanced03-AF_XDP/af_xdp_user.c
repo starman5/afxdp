@@ -71,7 +71,7 @@ This function defines how you would like to process the raw packet.
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
-bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Counter* countAr) {
+bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Counter* countAr, int idx) {
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
