@@ -348,7 +348,7 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 }
 
 void handle_receive_packets(struct threadArgs* th_args) {
-  printf("start handle_receive_packets\n");
+  //printf("start handle_receive_packets\n");
   struct xsk_socket_info* xsk = th_args->xski;
   int idx = th_args->idx;
 
@@ -398,7 +398,7 @@ void handle_receive_packets(struct threadArgs* th_args) {
 }
 
 void rx_and_process(void* args) {
-  printf("start rx_and_process\n");
+  //printf("start rx_and_process\n");
   struct threadArgs* th_args = (struct threadArgs*)args;
   struct xsk_socket_info* xski = th_args->xski;
   int idx = th_args->idx;
@@ -419,7 +419,7 @@ void rx_and_process(void* args) {
   fds[0].fd = xsk_socket__fd(xski->xsk);
   fds[0].events = POLLIN;
 
-  printf("before while\n");
+  //printf("before while\n");
   while (!global_exit) {
     if (cfg.xsk_poll_mode) {
       // ret = poll(fds, nfds, -1);
@@ -433,8 +433,10 @@ void rx_and_process(void* args) {
 
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
     /* Global shutdown handler */
+  printf("1\n");
   global_num_sockets = num_sockets;
   signal(SIGINT, exit_application);
+  printf("2\n");
 
   int ret;
   void* packet_buffers[num_sockets];
@@ -442,11 +444,13 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
   struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
   struct xsk_umem_info* umems[num_sockets];
   struct xsk_socket_info* xsk_sockets[num_sockets];
+  printf("3\n");
 
   Counter countAr[num_sockets];
   for (int i = 0; i < num_sockets; ++i) {
     countAr[i].count = 0;
   }
+  printf("4\n");
 
   /* Allow unlimited locking of memory, so all memory needed for packet
    * buffers can be locked.
@@ -456,6 +460,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
             strerror(errno));
     exit(EXIT_FAILURE);
   }
+  printf("5\n");
 
   /* Allocate memory for NUM_FRAMES of the default XDP frame size */
   packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
@@ -469,6 +474,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
               strerror(errno));
       exit(EXIT_FAILURE);
     }
+    printf("6\n");
 
     /* Configure UMEM */
     umems[sockidx] =
@@ -477,6 +483,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
       fprintf(stderr, "ERROR: Can't create umem \"%s\"\n", strerror(errno));
       exit(EXIT_FAILURE);
     }
+    printf("7\n");
 
     /* Open and configure the AF_XDP (xsk) sockets */
     // TODO: addition of 20 only for -z flag
@@ -487,9 +494,11 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
       exit(EXIT_FAILURE);
     }
   }
+  printf("8\n");
 
   /* Receive and count packets than drop them */
   pthread_t threads[num_sockets];
+  printf("9\n");
 
   struct threadArgs* threadArgs_ar[num_sockets];
   for (int th_idx = 0; th_idx < num_sockets; ++th_idx) {
@@ -500,6 +509,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
     threadArgs_ar[th_idx]->locks = locks;
     threadArgs_ar[th_idx]->custom_processing = custom_processing;
     threadArgs_ar[th_idx]->countAr = countAr;
+    printf("10\n");
     ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
                          threadArgs_ar[th_idx]);
   }
