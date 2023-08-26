@@ -79,7 +79,7 @@ struct threadArgs {
 static struct xdp_program* prog;
 static int xsk_map_fd;
 static bool custom_xsk = false;
-struct config cfg = {
+static struct config cfg = {
     .ifindex = -1,
 };
 

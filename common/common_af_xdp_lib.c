@@ -214,6 +214,11 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   xsk_cfg.bind_flags = cfg->xsk_bind_flags;
   xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD : 0;
   printf("3\n");
+  void* one = (void*)&xsk_info->xsk;
+  char* two = cfg->ifname;
+  struct xsk_umem* three = umem->umem;
+  void* four = (void*)&xsk_cfg;
+  prinf("4\n");
   ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue,
                                   umem->umem, &xsk_info->rx, &xsk_info->tx,
                                   &umem->fq, &umem->cq, &xsk_cfg);
