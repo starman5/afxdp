@@ -170,10 +170,8 @@ int main(int argc, char** argv) {
   int err;
   char errmsg[1024];
 
-  printf("before parse\n");
   /* Cmdline options */
   parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
-  printf("after parse\n");
 
   /* Required option */
   if (cfg.ifindex == -1) {
@@ -181,8 +179,6 @@ int main(int argc, char** argv) {
     usage(argv[0], __doc__, long_options, (argc == 1));
     return EXIT_FAIL_OPTION;
   }
-
-  printf("before loading custom program\n");
 
   /* Load custom program if configured */
   if (cfg.filename[0] != 0) {
@@ -227,14 +223,11 @@ int main(int argc, char** argv) {
     }
   }
   
-  printf("before init spinlocks\n");
   // Initialize the spinlocks for the hashtable
   Spinlock* locks = init_spinlocks();
-  printf("after init spinlock\n");
 
   // Initialize the hashtable, which will serve as the in-memory key-value store
   HASHTABLE_T hashtable = init_hashtable();
-  printf("after init hashtable\n");
 
   // Start NUM_SOCKETS AF_XDP sockets
   start_afxdp(NUM_SOCKETS, custom_processing, locks, hashtable);

@@ -348,6 +348,7 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 }
 
 void handle_receive_packets(struct threadArgs* th_args) {
+  printf("start handle_receive_packets\n");
   struct xsk_socket_info* xsk = th_args->xski;
   int idx = th_args->idx;
 
@@ -397,6 +398,7 @@ void handle_receive_packets(struct threadArgs* th_args) {
 }
 
 void rx_and_process(void* args) {
+  printf("start rx_and_process\n");
   struct threadArgs* th_args = (struct threadArgs*)args;
   struct xsk_socket_info* xski = th_args->xski;
   int idx = th_args->idx;
@@ -417,6 +419,7 @@ void rx_and_process(void* args) {
   fds[0].fd = xsk_socket__fd(xski->xsk);
   fds[0].events = POLLIN;
 
+  printf("before while\n");
   while (!global_exit) {
     if (cfg.xsk_poll_mode) {
       // ret = poll(fds, nfds, -1);
