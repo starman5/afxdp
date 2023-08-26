@@ -18,7 +18,8 @@ size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
 
 /*
-You must define a function with the signature "bool func(uint8_t* pkt)".
+You must define a function with this function signature.
+It takes in a pointer to a raw packet, a hashtable, an arry of locks, an array of counters, and a thread index
 This function defines how you would like to process the raw packet.
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
@@ -117,6 +118,7 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Cou
 }
 
 int main(int argc, char** argv) {
+  // Process cmd line args, load XDP, load xsks_map
   int init_success = init_afxdp(argc, argv);
   if (init_success != 0) {
     perror("FAIL");
