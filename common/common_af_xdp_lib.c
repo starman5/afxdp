@@ -442,7 +442,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
 
   Counter countAr[num_sockets];
   for (int i = 0; i < num_sockets; ++i) {
-    countAr[i] = 0;
+    countAr[i].count = 0;
   }
 
   /* Allow unlimited locking of memory, so all memory needed for packet
