@@ -117,7 +117,10 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Cou
 }
 
 int main(int argc, char** argv) {
-  init_afxdp(int argc, char** argv);
+  int init_success = init_afxdp(int argc, char** argv);
+  if (init_success != 0) {
+    perror("FAIL");
+  }
   
   // Initialize the spinlocks for the hashtable
   Spinlock* locks = init_spinlocks();

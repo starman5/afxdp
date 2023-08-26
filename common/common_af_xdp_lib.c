@@ -581,7 +581,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
   return EXIT_OK;
 }
 
-void init_afxdp(int argc, char** argv) {
+int init_afxdp(int argc, char** argv) {
   DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
   DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
   int err;
@@ -639,4 +639,5 @@ void init_afxdp(int argc, char** argv) {
       exit(EXIT_FAILURE);
     }
   }
+  return 0;
 }
