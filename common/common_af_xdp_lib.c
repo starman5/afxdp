@@ -218,7 +218,7 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   char* two = cfg->ifname;
   struct xsk_umem* three = umem->umem;
   void* four = (void*)&xsk_cfg;
-  prinf("4\n");
+  printf("4\n");
   ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue,
                                   umem->umem, &xsk_info->rx, &xsk_info->tx,
                                   &umem->fq, &umem->cq, &xsk_cfg);
