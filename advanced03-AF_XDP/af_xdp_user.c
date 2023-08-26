@@ -230,9 +230,11 @@ int main(int argc, char** argv) {
   printf("before init spinlocks\n");
   // Initialize the spinlocks for the hashtable
   Spinlock* locks = init_spinlocks();
+  printf("after init spinlock\n");
 
   // Initialize the hashtable, which will serve as the in-memory key-value store
   HASHTABLE_T hashtable = init_hashtable();
+  printf("after init hashtable\n");
 
   // Start NUM_SOCKETS AF_XDP sockets
   start_afxdp(NUM_SOCKETS, custom_processing, locks, hashtable);
