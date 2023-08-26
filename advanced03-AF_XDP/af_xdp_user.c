@@ -56,10 +56,6 @@ static const struct option_wrapper long_options[] = {
 
     {{0, 0, NULL, 0}, NULL, false}};
 
-// These are for counting the number of packets processed, returned when signal received
-atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
-Counter countAr[NUM_SOCKETS];
-
 // These are for defunct polling logic
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;

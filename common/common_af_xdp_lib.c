@@ -1,11 +1,16 @@
 #include "common_af_xdp_lib.h"
 
 static bool global_exit;
+static int global_num_sockets = 0;
+
+// These are for counting the number of packets processed, returned when signal received
+atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
+Counter countAr[NUM_SOCKETS];
 
 // Executed when signal received to stop
 static void exit_application(int signal) {
   uint64_t npackets = 0;
-  for (int i = 0; i < NUM_SOCKETS; ++i) {
+  for (int i = 0; i < global_num_sockets; ++i) {
     printf("thread %d: %d\n", i, countAr[i].count);
     npackets += countAr[i].count;
   }
@@ -431,8 +436,9 @@ void rx_and_process(void* args) {
 
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
     /* Global shutdown handler */
+  global_num_sockets = num_sockets;
   signal(SIGINT, exit_application);
-  
+
   int ret;
   void* packet_buffers[num_sockets];
   uint64_t packet_buffer_size;
