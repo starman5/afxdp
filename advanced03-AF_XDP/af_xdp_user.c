@@ -12,58 +12,10 @@
 
 #define DONT_OPTIMIZE(var) __asm__ __volatile__("" ::"m"(var));
 
-static const char* __doc__ = "AF_XDP kernel bypass example\n";
-
-static const struct option_wrapper long_options[] = {
-
-    {{"help", no_argument, NULL, 'h'}, "Show help", false},
-
-    {{"dev", required_argument, NULL, 'd'},
-     "Operate on device <ifname>",
-     "<ifname>",
-     true},
-
-    {{"skb-mode", no_argument, NULL, 'S'},
-     "Install XDP program in SKB (AKA generic) mode"},
-
-    {{"native-mode", no_argument, NULL, 'N'},
-     "Install XDP program in native mode"},
-
-    {{"auto-mode", no_argument, NULL, 'A'}, "Auto-detect SKB or native mode"},
-
-    {{"force", no_argument, NULL, 'F'},
-     "Force install, replacing existing program on interface"},
-
-    {{"copy", no_argument, NULL, 'c'}, "Force copy mode"},
-
-    {{"zero-copy", no_argument, NULL, 'z'}, "Force zero-copy mode"},
-
-    {{"queue", required_argument, NULL, 'Q'},
-     "Configure interface receive queue for AF_XDP, default=0"},
-
-    {{"poll-mode", no_argument, NULL, 'p'},
-     "Use the poll() API waiting for packets to arrive"},
-
-    {{"quiet", no_argument, NULL, 'q'}, "Quiet mode (no output)"},
-
-    {{"filename", required_argument, NULL, 1},
-     "Load program from <file>",
-     "<file>"},
-
-    {{"progname", required_argument, NULL, 2},
-     "Load program from function <name> in the ELF file",
-     "<name>"},
-
-    {{0, 0, NULL, 0}, NULL, false}};
-
 // These are for defunct polling logic
 atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
 size_t num_tx_packets = 0;
 struct timespec timeout_start = {0, 0};
-
-//*********************************************************************
-//******************** Mandatory AF_XDP Logic *************************
-//*********************************************************************
 
 /*
 You must define a function with the signature "bool func(uint8_t* pkt)".
@@ -165,63 +117,7 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Cou
 }
 
 int main(int argc, char** argv) {
-  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
-  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
-  int err;
-  char errmsg[1024];
-
-  /* Cmdline options */
-  parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
-
-  /* Required option */
-  if (cfg.ifindex == -1) {
-    fprintf(stderr, "ERROR: Required option --dev missing\n\n");
-    usage(argv[0], __doc__, long_options, (argc == 1));
-    return EXIT_FAIL_OPTION;
-  }
-
-  /* Load custom program if configured */
-  if (cfg.filename[0] != 0) {
-    struct bpf_map* map;
-
-    custom_xsk = true;
-    xdp_opts.open_filename = cfg.filename;
-    xdp_opts.prog_name = cfg.progname;
-    xdp_opts.opts = &opts;
-
-    if (cfg.progname[0] != 0) {
-      xdp_opts.open_filename = cfg.filename;
-      xdp_opts.prog_name = cfg.progname;
-      xdp_opts.opts = &opts;
-
-      prog = xdp_program__create(&xdp_opts);
-    } else {
-      prog = xdp_program__open_file(cfg.filename, NULL, &opts);
-    }
-    err = libxdp_get_error(prog);
-    if (err) {
-      libxdp_strerror(err, errmsg, sizeof(errmsg));
-      fprintf(stderr, "ERR: loading program: %s\n", errmsg);
-      return err;
-    }
-
-    err = xdp_program__attach(prog, cfg.ifindex, cfg.attach_mode, 0);
-    if (err) {
-      libxdp_strerror(err, errmsg, sizeof(errmsg));
-      fprintf(stderr, "Couldn't attach XDP program on iface '%s' : %s (%d)\n",
-              cfg.ifname, errmsg, err);
-      return err;
-    }
-
-    /* We also need to load the xsks_map */
-    map = bpf_object__find_map_by_name(xdp_program__bpf_obj(prog), "xsks_map");
-    xsk_map_fd = bpf_map__fd(map);
-    printf("correct xsk_map_fd: %d\n", xsk_map_fd);
-    if (xsk_map_fd < 0) {
-      fprintf(stderr, "ERROR: no xsks map found: %s\n", strerror(xsk_map_fd));
-      exit(EXIT_FAILURE);
-    }
-  }
+  init_afxdp(int argc, char** argv);
   
   // Initialize the spinlocks for the hashtable
   Spinlock* locks = init_spinlocks();
