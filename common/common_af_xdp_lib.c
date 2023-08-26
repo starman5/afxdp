@@ -508,19 +508,5 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
 
   printf("Threads finished\n");
 
-    /* Cleanup */
-  for (int sockidx = 0; sockidx < num_sockets; ++sockidx) {
-    xsk_socket__delete(xsk_sockets[sockidx]->xsk);
-    xsk_umem__delete(umems[sockidx]->umem);
-  }
-  for (int th_idx = 0; th_idx < num_sockets; ++th_idx) {
-    free(threadArgs_ar[th_idx]);
-  }
-  hashtable_cleanup(hashtable);
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    pthread_spin_destroy(&locks[i].lock);
-  }
-  free(locks);
-
   return EXIT_OK;
 }
