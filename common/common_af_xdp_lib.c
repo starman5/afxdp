@@ -284,8 +284,7 @@ inline uint16_t compute_ip_checksum(struct iphdr* ip) {
 }
 
 bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
-                           uint32_t len, struct threadArgs* th_args,
-                           ProcessFunction custom_processing) {
+                           uint32_t len, struct threadArgs* th_args) {
   
   HASHTABLE_T hashtable = th_args->hashtable;
   int idx = th_args->idx;

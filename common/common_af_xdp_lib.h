@@ -127,7 +127,7 @@ void table_set(HASHTABLE_T hashtable, uint64_t key, char* value, Spinlock* locks
 
 char* table_get(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks);
 
-void table_delete(HASHTABLE_T** hashtable, uint64_t key, Spinlock* locks);
+void table_delete(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks);
 
 void cleanup_hashtable(HASHTABLE_T hashtable);
 
