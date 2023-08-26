@@ -214,6 +214,7 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue,
                                   umem->umem, &xsk_info->rx, &xsk_info->tx,
                                   &umem->fq, &umem->cq, &xsk_cfg);
+  printf("3\n");
   if (ret) goto error_exit;
 
   if (custom_xsk) {
@@ -230,6 +231,8 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
     xsk_info->umem_frame_addr[i] = i * FRAME_SIZE;
 
   xsk_info->umem_frame_free = NUM_FRAMES;
+
+  printf("4\n");
 
   /* Stuff the receive path with buffers, we assume we have enough */
   ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
