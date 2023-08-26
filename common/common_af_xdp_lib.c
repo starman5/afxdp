@@ -193,6 +193,7 @@ uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk) {
 struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
                                                     struct xsk_umem_info* umem,
                                                     int queue) {
+  printf("1\n");
   struct xsk_socket_config xsk_cfg;
   struct xsk_socket_info* xsk_info;
   uint32_t idx;
@@ -200,6 +201,7 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   int ret;
   uint32_t prog_id;
 
+  printf("2\n");
   xsk_info = calloc(1, sizeof(*xsk_info));
   if (!xsk_info) return NULL;
 
