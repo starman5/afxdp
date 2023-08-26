@@ -71,7 +71,7 @@ This function defines how you would like to process the raw packet.
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
-bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks) {
+bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Counter* countAr) {
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
@@ -165,6 +165,8 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks) {
 }
 
 int main(int argc, char** argv) {
+  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
+  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
   int err;
   char errmsg[1024];
 

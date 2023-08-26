@@ -61,7 +61,7 @@ typedef struct spinlock {
 } Spinlock;
 
 
-typedef bool (*ProcessFunction)(uint8_t*, HASHTABLE_T, Spinlock*);
+typedef bool (*ProcessFunction)(uint8_t*, HASHTABLE_T, Spinlock*, Counter*);
 
 typedef struct counter {
   uint64_t count;
@@ -74,6 +74,7 @@ struct threadArgs {
   HASHTABLE_T hashtable;
   Spinlock* locks;
   ProcessFunction custom_processing;
+  Counter* countAr;
 };
 
 static struct xdp_program* prog;

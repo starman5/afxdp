@@ -5,16 +5,9 @@ static int global_num_sockets = 0;
 
 // These are for counting the number of packets processed, returned when signal received
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
-Counter* global_countAr;
 
 // Executed when signal received to stop
 static void exit_application(int signal) {
-  uint64_t npackets = 0;
-  for (int i = 0; i < global_num_sockets; ++i) {
-    printf("thread %d: %d\n", i, global_countAr[i].count);
-    npackets += global_countAr[i].count;
-  }
-  printf("total packets: %d\n", npackets);
   int err;
 
   cfg.unload_all = true;
@@ -318,12 +311,13 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   int idx = th_args->idx;
   Spinlock* locks = th_args->locks;
   ProcessFunction custom_processing = th_args->custom_processing;
+  Counter* countAr = th_args->countAr;
   
   int ret;
   uint32_t tx_idx = 0;
   uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-  if (!custom_processing(pkt, hashtable, locks)) {
+  if (!custom_processing(pkt, hashtable, locks, countAr)) {
     return false;
   }
 
@@ -437,18 +431,19 @@ void rx_and_process(void* args) {
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
     /* Global shutdown handler */
   global_num_sockets = num_sockets;
-  Counter countAr[num_sockets];
-  global_countAr = countAr;
   signal(SIGINT, exit_application);
 
   int ret;
   void* packet_buffers[num_sockets];
   uint64_t packet_buffer_size;
-  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
-  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
   struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
   struct xsk_umem_info* umems[num_sockets];
   struct xsk_socket_info* xsk_sockets[num_sockets];
+
+  Counter countAr[num_sockets];
+  for (int i = 0; i < num_sockets; ++i) {
+    countAr[i] = 0;
+  }
 
   /* Allow unlimited locking of memory, so all memory needed for packet
    * buffers can be locked.
@@ -501,6 +496,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
     threadArgs_ar[th_idx]->hashtable = hashtable;
     threadArgs_ar[th_idx]->locks = locks;
     threadArgs_ar[th_idx]->custom_processing = custom_processing;
+    threadArgs_ar[th_idx]->countAr = countAr;
     ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
                          threadArgs_ar[th_idx]);
   }
