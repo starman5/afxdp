@@ -5,14 +5,14 @@ static int global_num_sockets = 0;
 
 // These are for counting the number of packets processed, returned when signal received
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
-Counter countAr[NUM_SOCKETS];
+Counter* global_countAr;
 
 // Executed when signal received to stop
 static void exit_application(int signal) {
   uint64_t npackets = 0;
   for (int i = 0; i < global_num_sockets; ++i) {
-    printf("thread %d: %d\n", i, countAr[i].count);
-    npackets += countAr[i].count;
+    printf("thread %d: %d\n", i, global_countAr[i].count);
+    npackets += global_countAr[i].count;
   }
   printf("total packets: %d\n", npackets);
   int err;
@@ -437,6 +437,8 @@ void rx_and_process(void* args) {
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
     /* Global shutdown handler */
   global_num_sockets = num_sockets;
+  Counter countAr[num_sockets];
+  global_countAr = countAr;
   signal(SIGINT, exit_application);
 
   int ret;
