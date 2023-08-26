@@ -117,7 +117,7 @@ Spinlock and Hashtable
 
 Spinlock* init_spinlocks();
 
-HASHTABLE_T init_hashtable()
+HASHTABLE_T init_hashtable();
 
 uint64_t hash_key(uint64_t key);
 
