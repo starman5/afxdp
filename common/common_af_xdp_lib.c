@@ -208,7 +208,9 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   xsk_info->umem = umem;
   xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
   xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
+  printf("1\n");
   xsk_cfg.xdp_flags = cfg->xdp_flags;
+  printf("2\n");
   xsk_cfg.bind_flags = cfg->xsk_bind_flags;
   xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD : 0;
   ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue,
