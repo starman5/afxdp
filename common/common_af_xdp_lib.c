@@ -1,11 +1,5 @@
-#include "../common/common_af_xdp_lib.h"
+#include "common_af_xdp_lib.h"
 
-//************************************************************************
-//******************* Hashtable and Spinlock *****************************
-//************************************************************************
-
-// Initialize a spinlock for each bucket, for minimal lock contention
-// Return array of spinlocks
 Spinlock* init_spinlocks() {
   void* rawPtr_Spinlock;
   if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
