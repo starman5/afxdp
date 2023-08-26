@@ -323,7 +323,7 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   uint32_t tx_idx = 0;
   uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-  if (!custom_processing(pkt)) {
+  if (!custom_processing(pkt, hashtable, locks)) {
     return false;
   }
 

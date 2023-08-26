@@ -61,7 +61,7 @@ typedef struct spinlock {
 } Spinlock;
 
 
-typedef bool (*ProcessFunction)(uint8_t*);
+typedef bool (*ProcessFunction)(uint8_t*, HASHTABLE_T, Spinlock*);
 
 typedef struct counter {
   uint64_t count;
