@@ -60,13 +60,12 @@ typedef struct spinlock {
   char padding[CACHE_LINE_SIZE - sizeof(pthread_spinlock_t)];
 } Spinlock;
 
-
-typedef bool (*ProcessFunction)(uint8_t*, HASHTABLE_T, Spinlock*, Counter*);
-
 typedef struct counter {
   uint64_t count;
   char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
 } Counter;
+
+typedef bool (*ProcessFunction)(uint8_t*, HASHTABLE_T, Spinlock*, Counter*);
 
 struct threadArgs {
   struct xsk_socket_info* xski;
