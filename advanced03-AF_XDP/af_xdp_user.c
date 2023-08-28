@@ -137,8 +137,6 @@ int main(int argc, char** argv) {
 
   /* Load custom program if configured */
   if (cfg.filename[0] != 0) {
-    struct bpf_map* map;
-
     custom_xsk = true;
     xdp_opts.open_filename = cfg.filename;
     xdp_opts.prog_name = cfg.progname;

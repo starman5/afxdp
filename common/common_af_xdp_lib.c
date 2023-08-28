@@ -584,6 +584,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
 int init_afxdp(int argc, char** argv) {
     // This is the only AF_XDP specific part - loading the xsk map
     // We need a struct xdp_program*
+    struct bpf_map* map;
     map = bpf_object__find_map_by_name(xdp_program__bpf_obj(prog), "xsks_map");
     xsk_map_fd = bpf_map__fd(map);
     printf("correct xsk_map_fd: %d\n", xsk_map_fd);
@@ -591,6 +592,5 @@ int init_afxdp(int argc, char** argv) {
       fprintf(stderr, "ERROR: no xsks map found: %s\n", strerror(xsk_map_fd));
       exit(EXIT_FAILURE);
     }
-  }
   return 0;
 }
