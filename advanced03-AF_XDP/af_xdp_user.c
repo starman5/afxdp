@@ -167,7 +167,7 @@ int main(int argc, char** argv) {
     }
 
   // Process cmd line args, load XDP, load xsks_map
-  int init_success = init_afxdp(xdp_program* prog);
+  int init_success = init_afxdp(prog);
   if (init_success != 0) {
     perror("FAIL");
   }

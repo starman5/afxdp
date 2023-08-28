@@ -170,6 +170,6 @@ void rx_and_process(void* args);
 
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable);
 
-int init_afxdp(xdp_program* prog);
+int init_afxdp(struct xdp_program* prog);
 
 #endif

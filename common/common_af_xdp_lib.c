@@ -581,7 +581,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
   return EXIT_OK;
 }
 
-int init_afxdp(int argc, char** argv) {
+int init_afxdp(struct xdp_program* prog) {
     // This is the only AF_XDP specific part - loading the xsk map
     // We need a struct xdp_program*
     struct bpf_map* map;
