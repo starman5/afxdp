@@ -21,6 +21,8 @@ struct timespec timeout_start = {0, 0};
 You must define a function with this function signature.
 It takes in a pointer to a raw packet, a hashtable, an arry of locks, an array of counters, and a thread index
 This function defines how you would like to process the raw packet.
+It should perform any necessary modififaction of external data structures
+And upon function exit, pkt should be overwritten with the data you wish to send back out
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
@@ -118,8 +120,54 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Counter* countAr, in
 }
 
 int main(int argc, char** argv) {
+  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
+  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
+  int err;
+  char errmsg[1024];
+
+  /* Cmdline options */
+  parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
+
+  /* Required option */
+  if (cfg.ifindex == -1) {
+    fprintf(stderr, "ERROR: Required option --dev missing\n\n");
+    usage(argv[0], __doc__, long_options, (argc == 1));
+    return EXIT_FAIL_OPTION;
+  }
+
+  /* Load custom program if configured */
+  if (cfg.filename[0] != 0) {
+    custom_xsk = true;
+    xdp_opts.open_filename = cfg.filename;
+    xdp_opts.prog_name = cfg.progname;
+    xdp_opts.opts = &opts;
+
+    if (cfg.progname[0] != 0) {
+      xdp_opts.open_filename = cfg.filename;
+      xdp_opts.prog_name = cfg.progname;
+      xdp_opts.opts = &opts;
+
+      prog = xdp_program__create(&xdp_opts);
+    } else {
+      prog = xdp_program__open_file(cfg.filename, NULL, &opts);
+    }
+    err = libxdp_get_error(prog);
+    if (err) {
+      libxdp_strerror(err, errmsg, sizeof(errmsg));
+      fprintf(stderr, "ERR: loading program: %s\n", errmsg);
+      return err;
+    }
+
+    err = xdp_program__attach(prog, cfg.ifindex, cfg.attach_mode, 0);
+    if (err) {
+      libxdp_strerror(err, errmsg, sizeof(errmsg));
+      fprintf(stderr, "Couldn't attach XDP program on iface '%s' : %s (%d)\n",
+              cfg.ifname, errmsg, err);
+      return err;
+    }
+
   // Process cmd line args, load XDP, load xsks_map
-  int init_success = init_afxdp(argc, argv);
+  int init_success = init_afxdp(prog);
   if (init_success != 0) {
     perror("FAIL");
   }
