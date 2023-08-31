@@ -328,7 +328,7 @@ void handle_receive_packets(struct threadArgs* th_args) {
 }
 
 void rx_and_process(void* args) {
-  //printf("start rx_and_process\n");
+  printf("start rx_and_process\n");
   struct threadArgs* th_args = (struct threadArgs*)args;
   struct xsk_socket_info* xski = th_args->xski;
   int idx = th_args->idx;
@@ -363,6 +363,7 @@ void rx_and_process(void* args) {
 
 void start_afxdp(int num_sockets, ProcessFunction custom_processing, TABLE_T table) {
     /* Global shutdown handler */
+  printf("start afxdp\n");
   global_num_sockets = num_sockets;
   signal(SIGINT, exit_application);
 
