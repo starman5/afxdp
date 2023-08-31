@@ -92,6 +92,7 @@ inline __u32 xsk_ring_prod__free(struct xsk_ring_prod* r) {
 }
 
 struct xsk_umem_info* configure_xsk_umem(void* buffer, uint64_t size) {
+  printf("ifindex: %d\n", cfg.ifindex);
   struct xsk_umem_info* umem;
   int ret;
 
@@ -130,6 +131,7 @@ uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk) {
 struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
                                                     struct xsk_umem_info* umem,
                                                     int queue) {
+  printf("ifindex: %d\n", cfg.ifindex);
   struct xsk_socket_config xsk_cfg;
   struct xsk_socket_info* xsk_info;
   uint32_t idx;
@@ -336,6 +338,7 @@ void handle_receive_packets(struct threadArgs* th_args) {
 
 void rx_and_process(void* args) {
   printf("start rx_and_process\n");
+  printf("ifindex: %d\n", cfg.ifindex);
   struct threadArgs* th_args = (struct threadArgs*)args;
   struct xsk_socket_info* xski = th_args->xski;
   int idx = th_args->idx;
