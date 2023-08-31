@@ -446,6 +446,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, TABLE_T tab
 
 
 int init_afxdp(int argc, char** argv) {
+  printf("init af_xdp\n");
   DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
   DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
   int err;
