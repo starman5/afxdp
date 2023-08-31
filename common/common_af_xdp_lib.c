@@ -221,7 +221,7 @@ inline void csum_replace2(__sum16* sum, __be16 old, __be16 new) {
   *sum = ~csum16_add(csum16_sub(~(*sum), old), new);
 }
 
-inline uint16_t compute_ip_checksum(struct iphdr* ip) {
+/*inline uint16_t compute_ip_checksum(struct iphdr* ip) {
   uint32_t csum = 0;
   uint16_t* next_ip_u16 = (uint16_t*)ip;
 
@@ -232,7 +232,7 @@ inline uint16_t compute_ip_checksum(struct iphdr* ip) {
   }
 
   return ~((csum & 0xffff) + (csum >> 16));
-}
+}*/
 
 bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args) {
