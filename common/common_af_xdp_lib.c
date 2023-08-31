@@ -287,7 +287,7 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
 }
 
 void handle_receive_packets(struct threadArgs* th_args) {
-  //printf("start handle_receive_packets\n");
+  printf("start handle_receive_packets\n");
   struct xsk_socket_info* xsk = th_args->xski;
   int idx = th_args->idx;
 
