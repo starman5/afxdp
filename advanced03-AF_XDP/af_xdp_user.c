@@ -24,7 +24,7 @@ This function defines how you would like to process the raw packet.
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
-bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Counter* countAr, int idx) {
+bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Counter* countAr, int idx) {
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
@@ -52,28 +52,28 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Spinlock* locks, Cou
       break;
 
     case SET: {
-      char* value = (char*)malloc(VALUE_SIZE);
+      char* value = (char*)malloc(kValSize);
       // Get the value
       memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
-             VALUE_SIZE);
-      table_set(hashtable, key, value, locks);
+             kValSize);
+      kvs_set(hashtable, key, value);
       countAr[idx].count += 1;
       break;
     }
 
     case GET: {
-      value_get = table_get(hashtable, key, locks);
-#if VALUE_SIZE == 0
+      value_get = kvs_get(hashtable, key, value, ver);
+#if kValSize == 0
       DONT_OPTIMIZE(value_get);
 #else
-      memcpy(payload_data, value_get, VALUE_SIZE);
+      memcpy(payload_data, value_get, kValSize);
 #endif
       countAr[idx].count += 1;
       break;
     }
 
     case DEL: {
-      table_delete(hashtable, key, locks);
+      kvs_delete(hashtable, key);
       break;
     }
 

@@ -65,120 +65,6 @@ static void exit_application(int signal) {
   global_exit = true;
 }
 
-Spinlock* init_spinlocks() {
-  void* rawPtr_Spinlock;
-  if (posix_memalign(&rawPtr_Spinlock, CACHE_LINE_SIZE,
-                     TABLE_SIZE * sizeof(Spinlock)) != 0) {
-    perror("posix_memalign error\n");
-    exit(EXIT_FAILURE);
-  }
-  Spinlock* locks = (Spinlock*)rawPtr_Spinlock;
-
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    pthread_spin_init(&locks[i].lock, PTHREAD_PROCESS_PRIVATE);
-  }
-
-  return locks;
-}
-
-// Create, initialize and return hashtable
-HASHTABLE_T init_hashtable() {
-  HASHTABLE_T hashtable = (HASHTABLE_T)malloc(TABLE_SIZE * sizeof(Node*));
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    hashtable[i] = NULL;
-  }
-  return hashtable;
-}
-
-// Simple hash function for unsigned integers
-uint64_t hash_key(uint64_t key) { return key % TABLE_SIZE; }
-
-void cleanup_hashtable(HASHTABLE_T hashtable) {
-  for (int i = 0; i < TABLE_SIZE; ++i) {
-    Node* head = hashtable[i];
-    while (head) {
-      Node* tmp = head;
-      head = head->next;
-      free(tmp->value);
-      free(tmp);
-    }
-  }
-}
-
-void table_set(HASHTABLE_T hashtable, uint64_t key, char* value, Spinlock* locks) {
-  uint64_t hash = hash_key(key);
-  pthread_spin_lock(&locks[hash].lock);
-  Node* head = hashtable[hash];
-
-  // Look for key in hashtable
-  bool found = false;
-  while (head) {
-    if (head->key == key) {
-      head->value = value;
-      found = true;
-      break;
-    }
-    head = head->next;
-  }
-  if (found) {
-    pthread_spin_unlock(&locks[hash].lock);
-    return;
-  }
-
-  // If we didn't find the key, then add new node to head of linked list in O(1)
-  Node* new_node = malloc(sizeof(Node));
-  new_node->next = hashtable[hash];
-  new_node->key = key;
-  new_node->value = value;
-  hashtable[hash] = new_node;
-  pthread_spin_unlock(&locks[hash].lock);
-}
-
-char* table_get(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks) {
-  uint64_t hash = hash_key(key);
-  pthread_spin_lock(&locks[hash].lock);
-  Node* head = hashtable[hash];
-  while (head) {
-    if (head->key == key) {
-      pthread_spin_unlock(&locks[hash].lock);
-      return head->value;
-    }
-    head = head->next;
-  }
-  pthread_spin_unlock(&locks[hash].lock);
-  return NULL;
-}
-
-void table_delete(HASHTABLE_T hashtable, uint64_t key, Spinlock* locks) {
-  uint64_t hash = hash_key(key);
-  pthread_spin_lock(&locks[hash].lock);
-  Node* curr = hashtable[hash];
-  Node* prev = curr;
-  if (!curr) {
-    printf("Cannot delete from empty list\n");
-  }
-
-  // Delete first node in linked list
-  if (curr->key == key) {
-    hashtable[hash] = curr->next;
-    pthread_spin_unlock(&locks[hash].lock);
-    return;
-  }
-
-  curr = curr->next;
-  while (curr) {
-    if (curr->key == key) {
-      prev->next = curr->next;
-      free(curr);
-      pthread_spin_unlock(&locks[hash].lock);
-      return;
-    }
-
-    curr = curr->next;
-    prev = prev->next;
-  }
-  pthread_spin_unlock(&locks[hash].lock);
-}
 
 //**********************************************************************
 //************************ AF_XDP Logic ********************************
@@ -237,7 +123,6 @@ uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk) {
 struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
                                                     struct xsk_umem_info* umem,
                                                     int queue) {
-  printf("1\n");
   struct xsk_socket_config xsk_cfg;
   struct xsk_socket_info* xsk_info;
   uint32_t idx;
@@ -245,28 +130,18 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
   int ret;
   uint32_t prog_id;
 
-  printf("2\n");
   xsk_info = calloc(1, sizeof(*xsk_info));
   if (!xsk_info) return NULL;
 
   xsk_info->umem = umem;
   xsk_cfg.rx_size = XSK_RING_CONS__DEFAULT_NUM_DESCS;
   xsk_cfg.tx_size = XSK_RING_PROD__DEFAULT_NUM_DESCS;
-  printf("1\n");
   xsk_cfg.xdp_flags = cfg->xdp_flags;
-  printf("2\n");
   xsk_cfg.bind_flags = cfg->xsk_bind_flags;
   xsk_cfg.libbpf_flags = (custom_xsk) ? XSK_LIBBPF_FLAGS__INHIBIT_PROG_LOAD : 0;
-  printf("3\n");
-  void* one = (void*)&xsk_info->xsk;
-  char* two = cfg->ifname;
-  struct xsk_umem* three = umem->umem;
-  void* four = (void*)&xsk_cfg;
-  printf("4\n");
   ret = xsk_socket__create_shared(&xsk_info->xsk, cfg->ifname, queue,
                                   umem->umem, &xsk_info->rx, &xsk_info->tx,
                                   &umem->fq, &umem->cq, &xsk_cfg);
-  printf("3\n");
   if (ret) goto error_exit;
 
   if (custom_xsk) {
@@ -283,8 +158,6 @@ struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
     xsk_info->umem_frame_addr[i] = i * FRAME_SIZE;
 
   xsk_info->umem_frame_free = NUM_FRAMES;
-
-  printf("4\n");
 
   /* Stuff the receive path with buffers, we assume we have enough */
   ret = xsk_ring_prod__reserve(&xsk_info->umem->fq,
@@ -366,7 +239,6 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   
   HASHTABLE_T hashtable = th_args->hashtable;
   int idx = th_args->idx;
-  Spinlock* locks = th_args->locks;
   ProcessFunction custom_processing = th_args->custom_processing;
   Counter* countAr = th_args->countAr;
   
@@ -374,7 +246,7 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   uint32_t tx_idx = 0;
   uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-  if (!custom_processing(pkt, hashtable, locks, countAr, idx)) {
+  if (!custom_processing(pkt, hashtable, countAr, idx)) {
     return false;
   }
 
@@ -488,12 +360,10 @@ void rx_and_process(void* args) {
   }
 }
 
-void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* locks, HASHTABLE_T hashtable) {
+void start_afxdp(int num_sockets, ProcessFunction custom_processing, HASHTABLE_T hashtable) {
     /* Global shutdown handler */
-  printf("1\n");
   global_num_sockets = num_sockets;
   signal(SIGINT, exit_application);
-  printf("2\n");
 
   int ret;
   void* packet_buffers[num_sockets];
@@ -501,13 +371,11 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
   struct rlimit rlim = {RLIM_INFINITY, RLIM_INFINITY};
   struct xsk_umem_info* umems[num_sockets];
   struct xsk_socket_info* xsk_sockets[num_sockets];
-  printf("3\n");
 
   Counter countAr[num_sockets];
   for (int i = 0; i < num_sockets; ++i) {
     countAr[i].count = 0;
   }
-  printf("4\n");
 
   /* Allow unlimited locking of memory, so all memory needed for packet
    * buffers can be locked.
@@ -517,7 +385,6 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
             strerror(errno));
     exit(EXIT_FAILURE);
   }
-  printf("5\n");
 
   /* Allocate memory for NUM_FRAMES of the default XDP frame size */
   packet_buffer_size = NUM_FRAMES * FRAME_SIZE;
@@ -531,7 +398,6 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
               strerror(errno));
       exit(EXIT_FAILURE);
     }
-    printf("6\n");
 
     /* Configure UMEM */
     umems[sockidx] =
@@ -540,7 +406,6 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
       fprintf(stderr, "ERROR: Can't create umem \"%s\"\n", strerror(errno));
       exit(EXIT_FAILURE);
     }
-    printf("7\n");
 
     /* Open and configure the AF_XDP (xsk) sockets */
     // TODO: addition of 20 only for -z flag
@@ -551,11 +416,9 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
       exit(EXIT_FAILURE);
     }
   }
-  printf("8\n");
 
   /* Receive and count packets than drop them */
   pthread_t threads[num_sockets];
-  printf("9\n");
 
   struct threadArgs* threadArgs_ar[num_sockets];
   for (int th_idx = 0; th_idx < num_sockets; ++th_idx) {
@@ -563,10 +426,9 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, Spinlock* l
     threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
     threadArgs_ar[th_idx]->idx = th_idx;
     threadArgs_ar[th_idx]->hashtable = hashtable;
-    threadArgs_ar[th_idx]->locks = locks;
     threadArgs_ar[th_idx]->custom_processing = custom_processing;
     threadArgs_ar[th_idx]->countAr = countAr;
-    printf("10\n");
+
     ret = pthread_create(&threads[th_idx], NULL, rx_and_process,
                          threadArgs_ar[th_idx]);
   }
