@@ -5,7 +5,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "utils.h"
+#include "common_utils.h"
 
 #define MAX_LOG_ENTRY_NUM 1000000
 
