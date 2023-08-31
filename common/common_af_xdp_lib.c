@@ -47,10 +47,10 @@ static const struct option_wrapper long_options[] = {
 
     {{0, 0, NULL, 0}, NULL, false}};
 
-struct xdp_program* prog;
-int xsk_map_fd;
-bool custom_xsk = false;
-struct config cfg = {
+static struct xdp_program* prog;
+static int xsk_map_fd;
+static bool custom_xsk = false;
+static struct config cfg = {
     .ifindex = -1,
 };
 
