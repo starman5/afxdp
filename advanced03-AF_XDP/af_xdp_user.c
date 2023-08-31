@@ -21,7 +21,7 @@ And upon function exit, pkt should be overwritten with the data you wish to send
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
-bool custom_processing(uint8_t* pkt, TABLE_T hashtable, Counter* countAr, int idx) {
+bool custom_processing(uint8_t* pkt, TABLE_T table, Counter* countAr, int idx) {
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
@@ -51,7 +51,7 @@ bool custom_processing(uint8_t* pkt, TABLE_T hashtable, Counter* countAr, int id
       // Get the value
       char* value = (char*)malloc(VAL_SIZE);
       memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
-             Val_Size);
+             VAL_SIZE);
       kvs_set(table, key, value, 1);
       countAr[idx].count += 1;
       break;
