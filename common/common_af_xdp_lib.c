@@ -47,6 +47,13 @@ static const struct option_wrapper long_options[] = {
 
     {{0, 0, NULL, 0}, NULL, false}};
 
+struct xdp_program* prog;
+int xsk_map_fd;
+bool custom_xsk = false;
+struct config cfg = {
+    .ifindex = -1,
+};
+
 // These are for counting the number of packets processed, returned when signal received
 atomic_size_t num_packets = ATOMIC_VAR_INIT(0);
 

@@ -63,13 +63,6 @@ struct threadArgs {
   Counter* countAr;
 };
 
-static struct xdp_program* prog;
-static int xsk_map_fd;
-static bool custom_xsk = false;
-static struct config cfg = {
-    .ifindex = -1,
-};
-
 struct xsk_umem_info {
   struct xsk_ring_prod fq;
   struct xsk_ring_cons cq;
