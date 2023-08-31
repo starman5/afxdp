@@ -237,7 +237,7 @@ inline uint16_t compute_ip_checksum(struct iphdr* ip) {
 bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args) {
   
-  HASHTABLE_T hashtable = th_args->hashtable;
+  TABLE_T table = th_args->table;
   int idx = th_args->idx;
   ProcessFunction custom_processing = th_args->custom_processing;
   Counter* countAr = th_args->countAr;
@@ -246,7 +246,7 @@ bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
   uint32_t tx_idx = 0;
   uint8_t* pkt = xsk_umem__get_data(xsk->umem->buffer, addr);
 
-  if (!custom_processing(pkt, hashtable, countAr, idx)) {
+  if (!custom_processing(pkt, table, countAr, idx)) {
     return false;
   }
 
@@ -360,7 +360,7 @@ void rx_and_process(void* args) {
   }
 }
 
-void start_afxdp(int num_sockets, ProcessFunction custom_processing, HASHTABLE_T hashtable) {
+void start_afxdp(int num_sockets, ProcessFunction custom_processing, TABLE_T table) {
     /* Global shutdown handler */
   global_num_sockets = num_sockets;
   signal(SIGINT, exit_application);
@@ -425,7 +425,7 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, HASHTABLE_T
     threadArgs_ar[th_idx] = malloc(sizeof(struct threadArgs));
     threadArgs_ar[th_idx]->xski = xsk_sockets[th_idx];
     threadArgs_ar[th_idx]->idx = th_idx;
-    threadArgs_ar[th_idx]->hashtable = hashtable;
+    threadArgs_ar[th_idx]->table = table;
     threadArgs_ar[th_idx]->custom_processing = custom_processing;
     threadArgs_ar[th_idx]->countAr = countAr;
 
@@ -443,10 +443,57 @@ void start_afxdp(int num_sockets, ProcessFunction custom_processing, HASHTABLE_T
   return EXIT_OK;
 }
 
-int init_afxdp(struct xdp_program* prog) {
-    // This is the only AF_XDP specific part - loading the xsk map
-    // We need a struct xdp_program*
+
+int init_afxdp(int argc, char** argv) {
+  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
+  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
+  int err;
+  char errmsg[1024];
+
+  /* Cmdline options */
+  parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
+
+  /* Required option */
+  if (cfg.ifindex == -1) {
+    fprintf(stderr, "ERROR: Required option --dev missing\n\n");
+    usage(argv[0], __doc__, long_options, (argc == 1));
+    return EXIT_FAIL_OPTION;
+  }
+
+  /* Load custom program if configured */
+  if (cfg.filename[0] != 0) {
     struct bpf_map* map;
+
+    custom_xsk = true;
+    xdp_opts.open_filename = cfg.filename;
+    xdp_opts.prog_name = cfg.progname;
+    xdp_opts.opts = &opts;
+
+    if (cfg.progname[0] != 0) {
+      xdp_opts.open_filename = cfg.filename;
+      xdp_opts.prog_name = cfg.progname;
+      xdp_opts.opts = &opts;
+
+      prog = xdp_program__create(&xdp_opts);
+    } else {
+      prog = xdp_program__open_file(cfg.filename, NULL, &opts);
+    }
+    err = libxdp_get_error(prog);
+    if (err) {
+      libxdp_strerror(err, errmsg, sizeof(errmsg));
+      fprintf(stderr, "ERR: loading program: %s\n", errmsg);
+      return err;
+    }
+
+    err = xdp_program__attach(prog, cfg.ifindex, cfg.attach_mode, 0);
+    if (err) {
+      libxdp_strerror(err, errmsg, sizeof(errmsg));
+      fprintf(stderr, "Couldn't attach XDP program on iface '%s' : %s (%d)\n",
+              cfg.ifname, errmsg, err);
+      return err;
+    }
+
+    /* We also need to load the xsks_map */
     map = bpf_object__find_map_by_name(xdp_program__bpf_obj(prog), "xsks_map");
     xsk_map_fd = bpf_map__fd(map);
     printf("correct xsk_map_fd: %d\n", xsk_map_fd);
@@ -454,5 +501,6 @@ int init_afxdp(struct xdp_program* prog) {
       fprintf(stderr, "ERROR: no xsks map found: %s\n", strerror(xsk_map_fd));
       exit(EXIT_FAILURE);
     }
+  }
   return 0;
 }

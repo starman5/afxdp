@@ -46,19 +46,19 @@
 
 #define CACHE_LINE_SIZE 64
 
-typedef kvs* HASHTABLE_T;
+typedef struct kvs* TABLE_T;
 
 typedef struct counter {
   uint64_t count;
   char padding[CACHE_LINE_SIZE - sizeof(uint64_t)];
 } Counter;
 
-typedef bool (*ProcessFunction)(uint8_t*, HASHTABLE_T, Counter*, int);
+typedef bool (*ProcessFunction)(uint8_t*, TABLE_T, Counter*, int);
 
 struct threadArgs {
   struct xsk_socket_info* xski;
   int idx;
-  HASHTABLE_T hashtable;
+  TABLE_T table;
   ProcessFunction custom_processing;
   Counter* countAr;
 };
@@ -132,7 +132,7 @@ void handle_receive_packets(struct threadArgs* th_args);
 
 void rx_and_process(void* args);
 
-void start_afxdp(int num_sockets, ProcessFunction custom_processing, HASHTABLE_T hashtable);
+void start_afxdp(int num_sockets, ProcessFunction custom_processing, TABLE_T table);
 
 int init_afxdp(struct xdp_program* prog);
 

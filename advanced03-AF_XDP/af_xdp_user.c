@@ -12,11 +12,6 @@
 
 #define DONT_OPTIMIZE(var) __asm__ __volatile__("" ::"m"(var));
 
-// These are for defunct polling logic
-atomic_size_t num_ready = ATOMIC_VAR_INIT(0);
-size_t num_tx_packets = 0;
-struct timespec timeout_start = {0, 0};
-
 /*
 You must define a function with this function signature.
 It takes in a pointer to a raw packet, a hashtable, an arry of locks, an array of counters, and a thread index
@@ -26,7 +21,7 @@ And upon function exit, pkt should be overwritten with the data you wish to send
 It should return true upon successful completion and false on error.
 In this case, it performs hashtable operations.
 */
-bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Counter* countAr, int idx) {
+bool custom_processing(uint8_t* pkt, TABLE_T hashtable, Counter* countAr, int idx) {
   uint32_t tx_idx = 0;
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
@@ -46,7 +41,6 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Counter* countAr, in
 
   uint8_t comm = *(uint8_t*)payload_data;
   uint32_t key = *(uint32_t*)&payload_data[1];
-  char* value_get = NULL;
 
   // Process message from the client
   switch (comm) {
@@ -54,28 +48,29 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Counter* countAr, in
       break;
 
     case SET: {
-      char* value = (char*)malloc(kValSize);
       // Get the value
+      char* value = (char*)malloc(VAL_SIZE);
       memcpy(value, &payload_data[sizeof(uint8_t) + sizeof(uint32_t)],
-             kValSize);
-      kvs_set(hashtable, key, value);
+             Val_Size);
+      kvs_set(table, key, value, 1);
       countAr[idx].count += 1;
       break;
     }
 
     case GET: {
-      value_get = kvs_get(hashtable, key, value, ver);
-#if kValSize == 0
-      DONT_OPTIMIZE(value_get);
+      char* value = (char*)malloc(VAL_SIZE);
+      kvs_get(table, key, value, 1);
+/*#if VAL_SIZE == 0
+      DONT_OPTIMIZE(value);
 #else
-      memcpy(payload_data, value_get, kValSize);
-#endif
+      memcpy(payload_data, value_get, VAL_SIZE);
+#endif*/
       countAr[idx].count += 1;
       break;
     }
 
     case DEL: {
-      kvs_delete(hashtable, key);
+      kvs_delete(table, key);
       break;
     }
 
@@ -120,66 +115,18 @@ bool custom_processing(uint8_t* pkt, HASHTABLE_T hashtable, Counter* countAr, in
 }
 
 int main(int argc, char** argv) {
-  DECLARE_LIBBPF_OPTS(bpf_object_open_opts, opts);
-  DECLARE_LIBXDP_OPTS(xdp_program_opts, xdp_opts, 0);
-  int err;
-  char errmsg[1024];
-
-  /* Cmdline options */
-  parse_cmdline_args(argc, argv, long_options, &cfg, __doc__);
-
-  /* Required option */
-  if (cfg.ifindex == -1) {
-    fprintf(stderr, "ERROR: Required option --dev missing\n\n");
-    usage(argv[0], __doc__, long_options, (argc == 1));
-    return EXIT_FAIL_OPTION;
-  }
-
-  /* Load custom program if configured */
-  if (cfg.filename[0] != 0) {
-    custom_xsk = true;
-    xdp_opts.open_filename = cfg.filename;
-    xdp_opts.prog_name = cfg.progname;
-    xdp_opts.opts = &opts;
-
-    if (cfg.progname[0] != 0) {
-      xdp_opts.open_filename = cfg.filename;
-      xdp_opts.prog_name = cfg.progname;
-      xdp_opts.opts = &opts;
-
-      prog = xdp_program__create(&xdp_opts);
-    } else {
-      prog = xdp_program__open_file(cfg.filename, NULL, &opts);
-    }
-    err = libxdp_get_error(prog);
-    if (err) {
-      libxdp_strerror(err, errmsg, sizeof(errmsg));
-      fprintf(stderr, "ERR: loading program: %s\n", errmsg);
-      return err;
-    }
-
-    err = xdp_program__attach(prog, cfg.ifindex, cfg.attach_mode, 0);
-    if (err) {
-      libxdp_strerror(err, errmsg, sizeof(errmsg));
-      fprintf(stderr, "Couldn't attach XDP program on iface '%s' : %s (%d)\n",
-              cfg.ifname, errmsg, err);
-      return err;
-    }
-
   // Process cmd line args, load XDP, load xsks_map
-  int init_success = init_afxdp(prog);
+  int init_success = init_afxdp(argc, argv);
   if (init_success != 0) {
     perror("FAIL");
   }
-  
-  // Initialize the spinlocks for the hashtable
-  Spinlock* locks = init_spinlocks();
 
-  // Initialize the hashtable, which will serve as the in-memory key-value store
-  HASHTABLE_T hashtable = init_hashtable();
+  // Allocate table
+  TABLE_T table =  calloc(1, sizeof(struct kvs));
+  kvs_init(table);
 
   // Start NUM_SOCKETS AF_XDP sockets
-  start_afxdp(NUM_SOCKETS, custom_processing, locks, hashtable);
+  start_afxdp(NUM_SOCKETS, custom_processing, table);
 
   return EXIT_OK;
 }
