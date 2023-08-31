@@ -131,7 +131,7 @@ uint64_t xsk_umem_free_frames(struct xsk_socket_info* xsk) {
 struct xsk_socket_info* xsk_configure_socket(struct config* cfg,
                                                     struct xsk_umem_info* umem,
                                                     int queue) {
-  printf("ifindex: %d\n", cfg.ifindex);
+  printf("ifindex: %d\n", cfg->ifindex);
   struct xsk_socket_config xsk_cfg;
   struct xsk_socket_info* xsk_info;
   uint32_t idx;
