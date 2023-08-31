@@ -246,7 +246,6 @@ inline void csum_replace2(__sum16* sum, __be16 old, __be16 new) {
 bool process_packet(struct xsk_socket_info* xsk, uint64_t addr,
                            uint32_t len, struct threadArgs* th_args) {
   
-  printf("processing packet\n");
   TABLE_T table = th_args->table;
   int idx = th_args->idx;
   ProcessFunction custom_processing = th_args->custom_processing;
