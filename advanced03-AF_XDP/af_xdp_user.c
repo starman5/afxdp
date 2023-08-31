@@ -57,7 +57,7 @@ bool custom_processing(uint8_t* pkt, TABLE_T table, Counter* countAr, int idx) {
     }
 
     case GET: {
-      char value;
+      char value[VALUE_SIZE];
       int version;
       kvs_get(table, key, &value, &version);
 /*#if VAL_SIZE == 0
