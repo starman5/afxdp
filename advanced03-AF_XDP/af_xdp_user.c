@@ -58,12 +58,12 @@ bool custom_processing(uint8_t* pkt, TABLE_T table, Counter* counter, int th_idx
   switch (msg->type) {
     case kRead:
       ret = kvs_get(table, msg->key, msg->val, &msg->ver);
-      if (ret == 0) msg.type = kGrantRead;
+      if (ret == 0) msg->type = kGrantRead;
       else msg->type = kNotExist;
       break;
 
       case kSet:
-        ret = kvs_set(table, msg->key, msg->val);
+        ret = kvs_set(table, msg->key, msg->val, &msg->ver);
         if (ret == 0) msg->type = kSetAck;
         else msg->type = kNotExist;
         break;
