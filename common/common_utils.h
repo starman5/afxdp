@@ -9,20 +9,10 @@
 #include <linux/udp.h>
 
 #define VAL_SIZE 40
-#define LOCK_NUM 84000000
-#define SUBSCRIBER_NUM 7000000
-#define KVS_HASH_SIZE 20000000
+#define SUBSCRIBER_NUM 8000000
+#define KVS_HASH_SIZE 36000000 // for full
+// #define KVS_HASH_SIZE 18000000 // for half
 #define KEYS_PER_ENTRY 4
-
-// table types
-enum {
-  SUBSCRIBER = 0,
-  SECOND_SUBSCRIBER = 1,
-  ACCESS_INFO = 2,
-  SPECIAL_FACILITY = 3,
-  CALL_FORWARDING = 4,
-  TABLE_NUM = 5,
-};
 
 #define MAX_LCORE_NUM 128
 #define MAX_PROG_NUM 1
@@ -31,38 +21,16 @@ enum {
 
 // packet types
 #define READ 0
-#define ACQUIRE_LOCK 1
-#define ABORT 2
-#define COMMIT 3
+#define SET 1
+#define INSERT 2
 
-#define GRANT_READ 4
-#define REJECT_READ 5
-#define NOT_EXIST 6
-#define GRANT_LOCK 7
-#define REJECT_LOCK 8
-#define ABORT_ACK 9
-#define COMMIT_ACK 10
-#define REJECT_COMMIT 11
-
-// only used in sharding
-#define COMMIT_PRIM 12
-#define COMMIT_BCK 13
-#define COMMIT_LOG 14
-#define COMMIT_PRIM_ACK 15
-#define COMMIT_BCK_ACK 16
-#define COMMIT_LOG_ACK 17
-
-// only used in tatp
-#define INSERT_PRIM 18
-#define INSERT_BCK 19
-#define INSERT_PRIM_ACK 20
-#define INSERT_BCK_ACK 21
-#define DELETE_PRIM 22
-#define DELETE_BCK 23
-#define DELETE_LOG 24
-#define DELETE_PRIM_ACK 25
-#define DELETE_BCK_ACK 26
-#define DELETE_LOG_ACK 27
+#define GRANT_READ 3
+#define REJECT_READ 4
+#define SET_ACK 5
+#define REJECT_SET 6
+#define NOT_EXIST 7
+#define INSERT_ACK 8
+#define REJECT_INSERT 9
 
 #define SOCKET_BUF_SIZE 67108864
 
@@ -72,7 +40,6 @@ enum {
 
 struct message {
   uint8_t type;            // packet type
-  uint8_t table;           // table id
   uint64_t key;            // key
   uint8_t val[VAL_SIZE];   // value
   uint32_t ver;            // version
@@ -80,7 +47,6 @@ struct message {
 
 struct ext_message {
   uint8_t type;             // packet type
-  uint8_t table;            // table id
   uint64_t key1;            // key
   uint8_t val1[VAL_SIZE];   // value1, also used to store new bloom filter
   uint32_t ver1;            // version1, also used to indicate eviction
@@ -98,14 +64,6 @@ struct cache_entry {
   uint8_t dirty[KEYS_PER_ENTRY];
   uint64_t bloom_filter;
   uint64_t lock;
-};
-
-struct log_entry {
-  uint8_t is_del;
-  uint8_t table;
-  uint64_t key;
-  uint8_t val[VAL_SIZE];
-  uint32_t ver;
 };
 
 static inline uint16_t compute_ip_checksum(struct iphdr *ip) {

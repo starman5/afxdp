@@ -7,40 +7,60 @@
 #include <string.h>
 #include "common_utils.h"
 
-#define MAX_LOG_ENTRY_NUM 1000000
+// packet types
+enum PktType {
+  // client
+  kRead = 0,
+  kSet = 1,
+  kInsert = 2,
+
+  // server
+  kGrantRead = 3,
+  kRejectRead = 4,
+  kSetAck = 5,
+  kRejectSet = 6,
+  kNotExist = 7,
+  kInsertAck = 8,
+  kRejectInsert = 9,
+};
 
 struct kvs_entry {
-  uint64_t key;
-  uint8_t val[VAL_SIZE];
-  uint32_t ver;
+  uint64_t key[KEYS_PER_ENTRY];
+  uint8_t val[KEYS_PER_ENTRY][VAL_SIZE];
+  uint32_t ver[KEYS_PER_ENTRY];
+  uint8_t valid[KEYS_PER_ENTRY];
   struct kvs_entry *next;
 };
 
 struct kvs {
-  struct kvs_entry *bucket_heads[KVS_HASH_SIZE];
-  volatile int locks[KVS_HASH_SIZE];
+  int hash_size;
+  struct kvs_entry **bucket_heads;
+  int *locks;
 };
 
-static inline void kvs_init(struct kvs *kvs) {
-  memset(kvs->bucket_heads, 0, sizeof(kvs->bucket_heads));
-  for (int i = 0; i < KVS_HASH_SIZE; i++) kvs->locks[i] = 0;
+static inline void kvs_init(struct kvs *kvs, int hash_size) {
+  kvs->hash_size = hash_size;
+  kvs->bucket_heads = (struct kvs_entry **)calloc(hash_size, sizeof(struct kvs_entry *));
+  kvs->locks = (int *)calloc(hash_size, sizeof(int));
 }
 
-static inline uint32_t kvs_hash(uint64_t key) {
-  return (uint32_t)(fasthash64(&key, sizeof(key), 0xdeadbeef) % (uint64_t)KVS_HASH_SIZE);
+static inline uint32_t kvs_hash(struct kvs *kvs, uint64_t key) {
+  return (uint32_t)(fasthash64(&key, sizeof(key), 0xdeadbeef) % (uint64_t)kvs->hash_size);
 }
 
 static inline int kvs_get(struct kvs *kvs, uint64_t key, uint8_t *val, uint32_t *ver) {
-  uint32_t hash = kvs_hash(key);
+  uint32_t hash = kvs_hash(kvs, key);
   while (__sync_lock_test_and_set(&kvs->locks[hash], 1));
 
   struct kvs_entry *head = kvs->bucket_heads[hash];
   while (head) {
-    if (head->key == key) {
-      memcpy(val, head->val, VAL_SIZE);
-      *ver = head->ver;
-      __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
-      return 0;
+    for (int i = 0; i < KEYS_PER_ENTRY; i++) {
+      if (head->key[i] == key && head->valid[i]) {
+        memcpy(val, head->val[i], VAL_SIZE);
+        *ver = head->ver[i];
+        __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
+        return 0;
+      }
     }
     head = head->next;
   }
@@ -48,60 +68,104 @@ static inline int kvs_get(struct kvs *kvs, uint64_t key, uint8_t *val, uint32_t 
   return 1; // not found
 }
 
-static inline void kvs_insert(struct kvs *kvs, uint64_t key, uint8_t *val) {
-  uint32_t hash = kvs_hash(key);
+static inline void kvs_set(struct kvs *kvs, uint64_t key, uint8_t *val, uint32_t *ver) {
+  uint32_t hash = kvs_hash(kvs, key);
   while (__sync_lock_test_and_set(&kvs->locks[hash], 1));
 
+  struct kvs_entry *head = kvs->bucket_heads[hash];
+  while (head) {
+    for (int i = 0; i < KEYS_PER_ENTRY; i++) {
+      if (head->key[i] == key && head->valid[i]) {
+        memcpy(head->val[i], val, VAL_SIZE);
+        head->ver[i]++;
+        *ver = head->ver[i];
+        __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
+        return;
+      }
+    }
+    head = head->next;
+  }
+  *ver = 0;
+  __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
+}
+
+static inline void kvs_insert(struct kvs *kvs, uint64_t key, uint8_t *val) {
+  uint32_t hash = kvs_hash(kvs, key);
+  while (__sync_lock_test_and_set(&kvs->locks[hash], 1));
+
+  struct kvs_entry *head = kvs->bucket_heads[hash];
+  while (head) {
+    for (int i = 0; i < KEYS_PER_ENTRY; i++) {
+      if (!head->valid[i]) {
+        head->key[i] = key;
+        memcpy(head->val[i], val, VAL_SIZE);
+        head->ver[i] = 0;
+        head->valid[i] = 1;
+        __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
+        return;
+      }
+    }
+    head = head->next;
+  }
   struct kvs_entry *e = calloc(1, sizeof(struct kvs_entry));
-  e->key = key;
-  memcpy(e->val, val, VAL_SIZE);
-  e->ver = 0;
+  e->key[0] = key;
+  memcpy(e->val[0], val, VAL_SIZE);
+  e->ver[0] = 0;
+  e->valid[0] = 1;
   e->next = kvs->bucket_heads[hash];
   kvs->bucket_heads[hash] = e;
   __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
 }
 
-static inline uint32_t kvs_set(struct kvs *kvs, uint64_t key, uint8_t *val, uint32_t ver) {
-  uint32_t hash = kvs_hash(key);
+static inline void kvs_set_evict(struct kvs *kvs, uint64_t key, uint8_t *val, uint32_t ver) {
+  uint32_t hash = kvs_hash(kvs, key);
   while (__sync_lock_test_and_set(&kvs->locks[hash], 1));
 
   struct kvs_entry *head = kvs->bucket_heads[hash];
   while (head) {
-    if (head->key == key) {
-      memcpy(head->val, val, VAL_SIZE);
-      if (ver != 0) head->ver = ver;
-      else head->ver++;
-      __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
-      return head->ver;
+    for (int i = 0; i < KEYS_PER_ENTRY; i++) {
+      if (head->key[i] == key && head->valid[i]) {
+        memcpy(head->val[i], val, VAL_SIZE);
+        head->ver[i] = ver;
+        __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
+        return;
+      }
     }
     head = head->next;
   }
   __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
   kvs_insert(kvs, key, val);
-  return 0;
 }
 
 static inline void kvs_delete(struct kvs *kvs, uint64_t key) {
-  uint32_t hash = kvs_hash(key);
+  uint32_t hash = kvs_hash(kvs, key);
   while (__sync_lock_test_and_set(&kvs->locks[hash], 1));
 
   struct kvs_entry *head = kvs->bucket_heads[hash], *prev = NULL;
   while (head) {
-    if (head->key == key) {
-      if (prev) {
-        prev->next = head->next;
-      } else {
-        kvs->bucket_heads[hash] = head->next;
+    for (int i = 0; i < KEYS_PER_ENTRY; i++) {
+      if (head->key[i] == key && head->valid[i]) {
+        head->valid[i] = 0;
+        int all_invalid = 1;
+        for (int j = 0; j < KEYS_PER_ENTRY; j++) {
+          if (head->valid[j]) {
+            all_invalid = 0;
+            break;
+          }
+        }
+        if (all_invalid) {
+          if (prev) prev->next = head->next;
+          else kvs->bucket_heads[hash] = head->next;
+          free(head);
+        }
+        __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
+        return;
       }
-      free(head);
-      __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
-      return;
     }
     prev = head;
     head = head->next;
   }
   __sync_val_compare_and_swap(&kvs->locks[hash], 1, 0);
-  // panic("kvs_delete: key not found");
 }
 
 #endif // _KVS_H_
