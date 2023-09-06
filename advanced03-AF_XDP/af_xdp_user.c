@@ -27,6 +27,7 @@
 
 #define BPF_SYSFS_ROOT "/sys/fs/bpf"
 #define NUM_THREADS   1
+#define HASH_SIZE     1000000
 
 static int nr_cpus = 0;
 
@@ -37,8 +38,6 @@ static pthread_t tids[MAX_LCORE_NUM];
 static struct kvs *table;
 
 bool custom_processing(uint8_t* pkt, TABLE_T table, Counter* counter, int th_idx) {
-  struct message msg;
-
   // Parse headers
   uint8_t tmp_mac[ETH_ALEN];
   uint32_t tmp_ip;
@@ -54,23 +53,24 @@ bool custom_processing(uint8_t* pkt, TABLE_T table, Counter* counter, int th_idx
 
   // Treat payload as message
   struct message* msg = (struct message*)payload_data;
+  int ret;
 
   switch (msg->type) {
-    case PktType::kRead:
+    case kRead:
       ret = kvs_get(table, msg->key, msg->val, &msg->ver);
-      if (ret == 0) msg.type = PktType::kGrantRead;
-      else msg->type = PktType::kNotExist;
+      if (ret == 0) msg.type = kGrantRead;
+      else msg->type = kNotExist;
       break;
 
-      case PktType::kSet:
+      case kSet:
         ret = kvs_set(table, msg->key, msg->val);
-        if (ret == 0) msg->type = PktType::kSetAck;
-        else msg->type = PktType::kNotExist;
-        net_send(sockfd, &msg, &client_addr, worker_id);
+        if (ret == 0) msg->type = kSetAck;
+        else msg->type = kNotExist;
         break;
 
       default:
         return false;
+  }
 
   // Swap source and destination MAC
   memcpy(tmp_mac, eth->h_dest, ETH_ALEN);
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
 
   // Allocate and initialize key value store
   table = calloc(1, sizeof(struct kvs));
-  kvs_init(table);
+  kvs_init(table, HASH_SIZE);
 
 
   start_afxdp(NUM_THREADS, custom_processing, table);
