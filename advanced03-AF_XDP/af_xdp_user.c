@@ -37,6 +37,8 @@ static pthread_t tids[MAX_LCORE_NUM];
 // the main table
 static struct kvs *table;
 
+// This function defines the processing on a raw packet that should be done by AF_XDP sockets
+// On successful return, the raw packet data must be been overwritten with what you want to send out.
 bool custom_processing(uint8_t* pkt, TABLE_T table, Counter* counter, int th_idx) {
   // Parse headers
   uint8_t tmp_mac[ETH_ALEN];
@@ -105,8 +107,5 @@ int main(int argc, char *argv[]) {
   table = calloc(1, sizeof(struct kvs));
   kvs_init(table, HASH_SIZE);
 
-
   start_afxdp(NUM_THREADS, custom_processing, table);
-
-  fprintf(stderr, "all workers started\n");
 }
